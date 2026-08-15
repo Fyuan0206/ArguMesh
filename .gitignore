@@ -1,6 +1,53 @@
+# ============================================================
+# ArguMesh .gitignore
+# 只提交可复现运行所需的源码与配置；本地数据、密钥、依赖、构建产物一律不上传。
+# 会上传: src/ server/ scripts/ tests/ drizzle/ docs/ public/
+#         package.json pnpm-lock.yaml 配置文件 README LICENSE .env.example
+# ============================================================
+
+# --- 依赖（用 pnpm install 还原） ---
 node_modules/
+.pnpm-store/
+
+# --- 构建产物 ---
 dist/
-.env
+build/
+*.tsbuildinfo
+
+# --- 本地运行数据（SQLite、上传的 PDF、会话密钥） ---
 data/
 backups/
+*.db
+*.sqlite
+*.sqlite3
+*.key
+
+# --- 密钥与本机环境（只保留 .env.example 作为模板） ---
+.env
+.env.*
+!.env.example
+
+# --- 日志与缓存 ---
 *.log
+npm-debug.log*
+pnpm-debug.log*
+.cache/
+.vite/
+coverage/
+playwright-report/
+test-results/
+qa/
+
+# --- 操作系统 / 编辑器 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- 本机 Agent / 任务草稿，不属于开源源码 ---
+.cursor/
+IMPACT_ANALYSIS.md
+TASK_SUMMARY.md
