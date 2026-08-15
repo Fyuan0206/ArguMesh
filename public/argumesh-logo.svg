@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 104" role="img" aria-labelledby="title desc">
+  <title id="title">ArguMesh 论脉</title>
+  <desc id="desc">ArguMesh 论脉横版品牌标志，把证据连成研究脉络</desc>
+  <g transform="translate(4 4)">
+    <rect width="96" height="96" rx="23" fill="#101d27"/>
+    <rect x="1" y="1" width="94" height="94" rx="22" fill="none" stroke="#315161" stroke-width="2"/>
+    <path d="M21 68V27L48 48L75 27V68" fill="none" stroke="#7ce2f3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M21 68L48 79L75 68" fill="none" stroke="#2dc4d8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M48 48V79" fill="none" stroke="#2dc4d8" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="21" cy="27" r="6" fill="#101d27" stroke="#7ce2f3" stroke-width="4"/>
+    <circle cx="48" cy="48" r="6" fill="#101d27" stroke="#7ce2f3" stroke-width="4"/>
+    <circle cx="75" cy="27" r="6" fill="#101d27" stroke="#7ce2f3" stroke-width="4"/>
+    <circle cx="21" cy="68" r="5" fill="#2dc4d8"/>
+    <circle cx="48" cy="79" r="5" fill="#2dc4d8"/>
+    <circle cx="75" cy="68" r="5" fill="#2dc4d8"/>
+  </g>
+  <text x="124" y="49" fill="#172432" font-family="Inter, Arial, sans-serif" font-size="40" font-weight="700" letter-spacing="-1">ArguMesh</text>
+  <text x="125" y="76" fill="#056d82" font-family="Noto Sans SC, Microsoft YaHei, sans-serif" font-size="17" font-weight="700" letter-spacing="2">论脉</text>
+  <text x="185" y="76" fill="#687683" font-family="Noto Sans SC, Microsoft YaHei, sans-serif" font-size="14">把证据连成研究脉络</text>
+</svg>

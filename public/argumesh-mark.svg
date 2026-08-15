@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">ArguMesh 论脉标志</title>
+  <desc id="desc">由开放文献、字母 M 和证据网络节点组成的标志</desc>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#101d27"/>
+  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="14.25" fill="none" stroke="#315161" stroke-width="1.5"/>
+  <path d="M14 45V18L32 32L50 18V45" fill="none" stroke="#7ce2f3" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 45L32 52L50 45" fill="none" stroke="#2dc4d8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 32V52" fill="none" stroke="#2dc4d8" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="14" cy="18" r="4" fill="#101d27" stroke="#7ce2f3" stroke-width="3"/>
+  <circle cx="32" cy="32" r="4" fill="#101d27" stroke="#7ce2f3" stroke-width="3"/>
+  <circle cx="50" cy="18" r="4" fill="#101d27" stroke="#7ce2f3" stroke-width="3"/>
+  <circle cx="14" cy="45" r="3.25" fill="#2dc4d8"/>
+  <circle cx="32" cy="52" r="3.25" fill="#2dc4d8"/>
+  <circle cx="50" cy="45" r="3.25" fill="#2dc4d8"/>
+</svg>

@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1786528409321,
+      "tag": "0000_lovely_mystique",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786552892303,
+      "tag": "0001_nosy_shape",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786587114061,
+      "tag": "0002_special_champions",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786617937424,
+      "tag": "0003_far_human_torch",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786716658579,
+      "tag": "0004_real_starfox",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786777113876,
+      "tag": "0005_jazzy_zaran",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786791189546,
+      "tag": "0006_deep_dagger",
+      "breakpoints": true
+    }
+  ]
+}
