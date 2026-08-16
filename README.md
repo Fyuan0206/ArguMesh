@@ -20,23 +20,44 @@ ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research wo
 ### Project-first workspace
 Sign in and you land on your project list. Click a project and the workspace scopes to it: literature, evidence matrices, and ideas are all organized inside the project, while cross-project tools (knowledge base, task center, global search) stay one click away in the sidebar.
 
+<img src="./docs/screenshots/projects.png" alt="Project list — create, search, and enter research projects" width="900" />
+
+<img src="./docs/screenshots/project-home.png" alt="Project home — literature, matrix, ideas, and knowledge at a glance" width="900" />
+
 ### Literature library
 Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 核心文献), favorites, tags, and per-project notes.
+
+<img src="./docs/screenshots/library.png" alt="Literature library — papers, reading status, and Paper Card shortcuts" width="900" />
 
 ### PDF reader with structured annotations
 Built-in PDF reader with OCR. Select any passage and save it as a Note, Claim, or Evidence — the paper reference and page number stay attached. Ask the AI about a passage: only the text you selected, its page number, and your question are sent to the model — never the whole document.
 
+<img src="./docs/screenshots/reader.png" alt="PDF reader — page view, selection, notes, and grounded Q&A" width="900" />
+
 ### AI Paper Card
 Generate a structured card for any paper: Problem, Method, Data, Findings, Limitations — each field with source excerpts, so every claim can be traced back to the paper.
+
+<img src="./docs/screenshots/paper-card.png" alt="Paper Card — structured problem, method, data, findings, and limitations" width="900" />
 
 ### Evidence Matrix
 The core of ArguMesh: papers as columns × research dimensions as rows. AI extraction fills every cell with evidence, confidence, and source location (page + excerpt). Then you verify: mark a cell 原文一致 (matches the source), 需要修订 (needs revision), or 标记冲突 (conflict), and 确认并锁定 (confirm & lock) the ones you trust. Locked cells are never silently overwritten by batch AI runs.
 
+<img src="./docs/screenshots/matrix.png" alt="Evidence Matrix — papers × dimensions, with source-linked verification" width="900" />
+
 ### Idea workflow
 Ideas move through a kanban board (Inbox → Draft → Reviewing → Approved → Experimenting → Writing → Archived). The Idea Canvas links Problem, Gap, Hypothesis, Method, Experiment, and Risks to the evidence behind them, and every save keeps a version history.
 
+<img src="./docs/screenshots/ideas.png" alt="Idea workflow — Inbox, Draft, Reviewing, and Approved columns" width="900" />
+
 ### Knowledge base
 Notes, Claims, and Evidence in one place, linked to their papers and pages — the raw material your Ideas are built from.
+
+<img src="./docs/screenshots/knowledge.png" alt="Knowledge base — notes, claims, and evidence in one place" width="900" />
+
+### Global search
+Search across projects from one box. Results stay scoped to your account.
+
+<img src="./docs/screenshots/search.png" alt="Global search across projects and literature" width="900" />
 
 ### Task center
 Every AI job (matrix extraction, PDF parsing…) shows its scope, model, progress, and result — and can be cancelled. No invisible batch processing.
@@ -114,7 +135,7 @@ scripts/           # seed, migrate, backup
 drizzle/           # SQL migrations (drizzle-kit generated)
 tests/unit/        # frontend unit tests (happy-dom)
 tests/api/         # API tests (app.request + temporary SQLite)
-docs/              # brand guidelines
+docs/              # brand guidelines + README screenshots
 ```
 
 ## Tests

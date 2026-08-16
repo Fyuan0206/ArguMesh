@@ -18,23 +18,44 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 ### 项目优先的工作区
 登录后直接进入项目列表;点进一个项目,文献、证据矩阵、Ideas 全部在项目内部组织,跨项目工具(知识库、任务中心、全局搜索)始终留在侧边栏。
 
+<img src="./docs/screenshots/projects.png" alt="项目列表：新建、搜索并进入研究项目" width="900" />
+
+<img src="./docs/screenshots/project-home.png" alt="项目概览：文献、矩阵、Ideas 与知识对象一览" width="900" />
+
 ### 文献库
 按 DOI / arXiv / URL 导入文献(自动获取元数据),或批量上传 PDF(单文件 ≤ 25 MB)。支持阅读状态(待读 → 粗读 → 精读 → 核心文献)、收藏、标签与项目内笔记。
+
+<img src="./docs/screenshots/library.png" alt="文献库：论文列表、阅读状态与 Paper Card 入口" width="900" />
 
 ### PDF 阅读器:结构化标注
 内置阅读器(pdf.js + OCR)。选中原文任意片段,保存为 Note、Claim 或 Evidence,论文与页码随之保留;阅读问答只提交你主动选中的原文、页码和问题,绝不整篇上传。
 
+<img src="./docs/screenshots/reader.png" alt="PDF 阅读器：原文、选区标注与基于选区的问答" width="900" />
+
 ### AI Paper Card
 为每篇论文生成结构化卡片:问题 / 方法 / 数据 / 发现 / 局限,每个字段附原文出处摘录,可回溯核对。
+
+<img src="./docs/screenshots/paper-card.png" alt="Paper Card：研究问题、方法、数据与发现的结构化卡片" width="900" />
 
 ### 证据矩阵(核心)
 论文为列 × 研究维度为行。AI 提取逐格填入证据、置信度与来源位置(页码 + 摘录);然后人工核验:标记「原文一致」「需要修订」或「标记冲突」,可信的格子「确认并锁定」。锁定的格子不会被批量 AI 运行静默覆盖。
 
+<img src="./docs/screenshots/matrix.png" alt="证据矩阵：论文 × 研究维度，单元格可回溯到原文" width="900" />
+
 ### Idea 工作流
 Ideas 沿看板流转(Inbox → Draft → Reviewing → Approved → Experimenting → Writing → Archived);Idea Canvas 连接问题、Gap、假设、方法、实验与风险及其背后的证据,每次保存保留版本历史。
 
+<img src="./docs/screenshots/ideas.png" alt="Idea 工作流：Inbox、Draft、Reviewing、Approved 看板" width="900" />
+
 ### 知识库
 Note、Claim、Evidence 统一管理,链接到论文与页码——Idea 的原始素材。
+
+<img src="./docs/screenshots/knowledge.png" alt="知识库：笔记、主张与证据统一管理" width="900" />
+
+### 全局搜索
+一个搜索框覆盖全部项目与文献,结果始终限定在当前账号。
+
+<img src="./docs/screenshots/search.png" alt="全局搜索" width="900" />
 
 ### 任务中心
 每个 AI 任务(矩阵提取、PDF 解析……)展示范围、模型、进度与结果,可取消。批处理全程可见。
@@ -136,7 +157,7 @@ scripts/           # seed(建表+种子)、migrate、backup
 drizzle/           # SQL 迁移文件(drizzle-kit 生成)
 tests/unit/        # 前端单元测试(happy-dom)
 tests/api/         # API 测试(app.request + 临时 SQLite)
-docs/              # 品牌规范
+docs/              # 品牌规范 + README 截图
 ```
 
 ## 测试
