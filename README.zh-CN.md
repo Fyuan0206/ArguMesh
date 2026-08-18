@@ -10,6 +10,7 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 
 - **零云依赖**:数据全部保存在本地 SQLite 文件,不需要注册任何云服务
 - **开箱即用**:`pnpm install && pnpm run dev` 即可启动,默认管理员 `admin / admin123`
+- **可让 AI 代为部署**:把 [让 AI 部署](#让-ai-部署) 中的提示词发给 Cursor / Claude Code / Codex / Copilot 等编程助手即可
 - **多用户**:管理员可以为课题组成员创建独立账号,数据按账号隔离
 - **AI 可选**:接入任意 OpenAI 兼容 API(OpenAI / DeepSeek / StepFun / 本地模型等),不配置也能使用全部人工流程
 
@@ -76,6 +77,32 @@ Note、Claim、Evidence 统一管理,链接到论文与页码——Idea 的原�
 | 多篇论文靠手工表格横向比较,维度不统一、证据出处易丢失 | 证据矩阵以论文为列、研究维度为行,证据可核验、确认、锁定或标记冲突 |
 | 笔记、主张、证据和研究想法彼此割裂 | 知识库统一管理 Note、Claim、Evidence;Idea Canvas 连接问题、Gap、假设、方法、实验与风险 |
 | AI 批处理过程不可见,失败后难以追踪 | 任务中心记录范围、模型、进度与结果,可取消 |
+
+## 让 AI 部署
+
+如果你在用 [Cursor](https://cursor.com)、[Claude Code](https://claude.com/claude-code)、Codex、Copilot、Trae 等能在本仓库里执行命令的编程助手,把下面这段提示词原样发给它,让它完成安装、初始化数据库并启动。助手还应阅读 [`CLAUDE.md`](./CLAUDE.md)——那是给 coding agent 的项目手册。
+
+```
+请在本仓库本地部署 ArguMesh(论脉)。
+
+这是一个本地优先的 Node.js + SQLite 应用。不要引入 Cloudflare Workers、wrangler 或 Turso。
+
+1. 前置条件:Node.js ≥ 20。若没有 pnpm,先执行 `corepack enable`。
+2. 阅读仓库根目录的 CLAUDE.md、README.zh-CN.md(或 README.md)和 .env.example。
+3. 在仓库根目录执行 `pnpm install`。
+4. `.env` 可选。不要编造或提交 API Key。仅当用户要自定义 DATABASE_URL、APP_ACCESS_TOKEN 或 AI 服务时,才从 `.env.example` 复制为 `.env`。
+5. 执行 `pnpm run db:seed`(可重复运行:建表 + 默认管理员 `admin` / `admin123` + 演示项目)。
+6. 启动:
+   - 开发模式(默认):`pnpm run dev` → 前端 http://localhost:5173 ,API 127.0.0.1:8787
+   - 单端口生产模式:`pnpm run build` 然后 `pnpm start` → http://127.0.0.1:8787
+7. 告诉用户打开上述地址,用 admin / admin123 登录,并在首次登录后修改密码。
+
+若当前是 Windows PowerShell 5.x,命令之间用 `;` 连接,不要用 `&&`。
+除非用户明确要求公网部署,否则不要把服务暴露到公网。若要公网部署:必须改掉 admin 默认密码,在 `.env` 中显式设置 APP_ACCESS_TOKEN,并用反向代理(Caddy / Nginx)提供 HTTPS。
+不要额外启动其他服务。用 GET /api/health 确认服务已起来。
+```
+
+人工逐步安装见下方 [部署](#部署)。
 
 ## 部署
 

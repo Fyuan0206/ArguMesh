@@ -10,6 +10,7 @@ ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research wo
 
 - **Zero cloud dependencies** — all data lives in a local SQLite file; no sign-ups, no vendor lock-in
 - **Works out of the box** — `pnpm install && pnpm run dev`, default admin `admin / admin123`
+- **Ask an AI to deploy it** — paste the prompt in [Deploy with AI](#deploy-with-ai) into Cursor, Claude Code, Codex, or Copilot
 - **Multi-user** — admins create member accounts; all data is isolated per account
 - **AI is optional** — plug in any OpenAI-compatible endpoint (OpenAI / DeepSeek / StepFun / local models); every manual workflow works without it
 
@@ -78,6 +79,32 @@ Each account configures its own OpenAI-compatible endpoint in Settings — Base 
 | Manual spreadsheets make paper comparison inconsistent | The Evidence Matrix standardizes dimensions; every cell carries source, confidence, and verification state |
 | Notes, claims, evidence, and ideas are disconnected | The knowledge base unifies them; the Idea Canvas links them into hypotheses and experiments |
 | Batch AI work is opaque and hard to retrace | The task center records scope, model, progress, and results |
+
+## Deploy with AI
+
+If you use [Cursor](https://cursor.com), [Claude Code](https://claude.com/claude-code), Codex, Copilot, or another coding agent that can run commands in this repo, paste the prompt below and let it install, seed, and start ArguMesh. The agent should also read [`CLAUDE.md`](./CLAUDE.md) — that file is the project runbook for coding agents.
+
+```
+Deploy ArguMesh (论脉) locally from this repository.
+
+This is a local-first Node.js + SQLite app. Do not add Cloudflare Workers, wrangler, or Turso.
+
+1. Prerequisites: Node.js ≥ 20. If pnpm is missing, run `corepack enable`.
+2. Read CLAUDE.md, README.md, and .env.example in the repo root.
+3. From the repo root, run `pnpm install`.
+4. `.env` is optional. Do not invent or commit API keys. Copy `.env.example` to `.env` only if the user wants to set DATABASE_URL, APP_ACCESS_TOKEN, or AI providers.
+5. Run `pnpm run db:seed` (idempotent: creates tables + default admin `admin` / `admin123` + a demo project).
+6. Start the app:
+   - Development (default): `pnpm run dev` → frontend http://localhost:5173 , API 127.0.0.1:8787
+   - Single-port production-style: `pnpm run build` then `pnpm start` → http://127.0.0.1:8787
+7. Tell the user to open the URL, sign in with admin / admin123, and change the password after first login.
+
+On Windows PowerShell 5.x, chain commands with `;` not `&&`.
+Do not expose the server to the public internet unless the user explicitly asks. If they do: change the admin password, set APP_ACCESS_TOKEN in `.env`, and put HTTPS in front (Caddy / Nginx).
+Do not start extra services. Confirm the app is up by hitting GET /api/health.
+```
+
+Manual steps for humans are in [Deployment](#deployment) below.
 
 ## Deployment
 
