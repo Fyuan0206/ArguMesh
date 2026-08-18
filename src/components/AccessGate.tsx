@@ -5,6 +5,8 @@ import { BrandMark } from "./BrandMark";
 
 interface AccessGateProps {
   errorMessage?: string | null;
+  /** 落地页登录弹层内嵌模式:去卡片外框,由父级承载。 */
+  embedded?: boolean;
 }
 
 /**
@@ -18,7 +20,7 @@ interface AccessGateProps {
  *  - 弱化账户提示(只显示姓名,不显示密码),帮首次使用者快速识别
  *  - 提交按钮在 loading 时显示内嵌 Spinner,避免布局跳动
  */
-export function AccessGate({ errorMessage }: AccessGateProps) {
+export function AccessGate({ errorMessage, embedded = false }: AccessGateProps) {
   const auth = useAuth();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -52,7 +54,7 @@ export function AccessGate({ errorMessage }: AccessGateProps) {
   }
 
   return (
-    <main className="access-screen" aria-labelledby={`${nameId}-title`}>
+    <main className={`access-screen ${embedded ? "access-screen-embedded" : ""}`} aria-labelledby={`${nameId}-title`}>
       <form className="access-card" onSubmit={onSubmit} noValidate aria-describedby={`${nameId}-desc`}>
         <header className="access-header">
           <div className="access-brand">

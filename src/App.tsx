@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
-import { AccessGate } from "./components/AccessGate";
 import { Sidebar } from "./components/Sidebar";
 import { IdeasPage } from "./pages/IdeasPage";
 import { LibraryPage } from "./pages/LibraryPage";
@@ -18,6 +17,7 @@ import { UsersPage } from "./pages/UsersPage";
 import { useAuth } from "./state/auth";
 import { ProjectProvider } from "./state/project";
 import { WorkspaceProvider } from "./state/workspace";
+import { LandingPage } from "./pages/LandingPage";
 
 const ReaderPage = lazy(() => import("./pages/ReaderPage").then((module) => ({ default: module.ReaderPage })));
 
@@ -50,9 +50,9 @@ function AppShell() {
 
 export function App() {
   const auth = useAuth();
-  if (!auth.hasToken) return <AccessGate />;
+  if (!auth.hasToken) return <LandingPage />;
   const accountId = auth.session?.accountId;
-  if (!accountId) return <AccessGate />;
+  if (!accountId) return <LandingPage />;
 
   return (
     <WorkspaceProvider accountId={accountId}>

@@ -1,5 +1,5 @@
 import { FolderSimple, MagnifyingGlass, PencilSimple, Plus, Trash, X } from "@phosphor-icons/react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { EditProjectForm } from "../components/EditProjectForm";
 import { PageHeader } from "../components/PageHeader";
@@ -14,6 +14,15 @@ export function ProjectsPage() {
   const [editingId, setEditingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const [deleting, setDeleting] = useState(false);
+  // 从落地页登录预填的研究问题:挂载时读一次并清空,展开内联表单预填到「研究目标」。
+  const [pendingQuestion, setPendingQuestion] = useState("");
+  useEffect(() => {
+    const next = window.sessionStorage.getItem("argumesh_pending_project_question")?.trim();
+    if (!next) return;
+    window.sessionStorage.removeItem("argumesh_pending_project_question");
+    setPendingQuestion(next);
+    setCreating(true);
+  }, []);
   const filtered = useMemo(() => projects.filter((project) => `${project.name} ${project.description}`.toLowerCase().includes(query.toLowerCase())), [projects, query]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -49,7 +58,7 @@ export function ProjectsPage() {
       <div className="toolbar-row">
         <label className="search wide"><MagnifyingGlass /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目" /></label>
       </div>
-      {creating ? <form className="inline-form" onSubmit={submit}><div><strong>创建研究项目</strong></div><label><span>项目名称</span><input name="name" required autoFocus placeholder="例如：多模态医学影像推理" /></label><label className="grow"><span>研究目标</span><input name="description" placeholder="一句话描述要解决的问题" /></label><button className="primary" type="submit">创建</button><button className="icon-button" type="button" onClick={() => setCreating(false)} aria-label="取消"><X /></button></form> : null}
+      {creating ? <form key={pendingQuestion || "new"} className="inline-form" onSubmit={submit}><div><strong>创建研究项目</strong></div><label><span>项目名称</span><input name="name" required autoFocus placeholder="例如：多模态医学影像推理" /></label><label className="grow"><span>研究目标</span><input name="description" defaultValue={pendingQuestion} placeholder="一句话描述要解决的问题" /></label><button className="primary" type="submit">创建</button><button className="icon-button" type="button" onClick={() => setCreating(false)} aria-label="取消"><X /></button></form> : null}
       {editingId ? (() => {
         const editing = projects.find((project) => project.id === editingId);
         return editing ? <EditProjectForm project={editing} onCancel={() => setEditingId("")} onSubmit={(updates) => { updateProject(editing.id, updates); setEditingId(""); }} /> : null;
