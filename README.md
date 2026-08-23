@@ -69,20 +69,6 @@ Admins manage member accounts (create, reset password, change role, delete — d
 ### Bring your own AI
 Each account configures its own OpenAI-compatible endpoint in Settings — Base URL (default `https://api.openai.com/v1`), API Key, and model name. Keys are stored server-side and never returned to the browser. With no AI configured, every manual workflow still works; AI features return a clear "AI not configured" notice pointing at the settings page.
 
-### Research arc (Research Question → Knowledge → Gap → Idea → Experiment)
-A structured path from a research question to an experiment plan. A **Research Question** is the spine that papers, knowledge, gaps, and ideas hang off. **Knowledge** items (notes / claims / evidence with source + page provenance) feed **Gap** discovery (AI-assisted or manual), gaps convert into **Ideas** with a 6-section canvas (problem / gap / hypothesis / method / experiment / risks) and version history, and ideas link to **Experiments** with append-only run results. **Evidence Layers** refine a single quote into interpretation → implication, and can be promoted into knowledge / gap / idea. All AI-generated objects are saved as drafts with model + timestamp provenance, and lock-in (`confirmed` / `locked`) is never silently overwritten by batch AI runs.
-
-## Changelog
-
-### v0.3 — Research arc (2026-08-23)
-- **Research Core** (`research_questions` as the spine) + `rq_papers` many-to-many linking.
-- **Knowledge → Gap → Idea → Experiment** chain, each a first-class object with a state machine and provenance (`source` / `model` / `generatedAt`).
-- **Evidence Layers**: refine a quote through `raw → interpretation → implication`, with explicit user-triggered promotion into knowledge / gap / idea.
-- **AI capability layer** (`server/ai/`): shared `completeJson` / `completeText` primitives + per-task prompts; AI output is Zod-validated and defended against prompt injection.
-- New frontend pages: Research Questions, Gaps, Experiments (project-scoped, with global fallback routes).
-- Migration `0007_last_deathbird` adds 13 research-arc tables. `pnpm run db:migrate` (or a fresh `db:seed`) to apply.
-- Admin cross-account data access (available in the Cloudflare `prototype/` edition) is intentionally not part of this open-source edition.
-
 ## Why ArguMesh
 
 | Common problem | How ArguMesh handles it |
@@ -146,6 +132,29 @@ All configuration is optional — see `.env.example`:
 - `APP_ACCESS_TOKEN` — HMAC secret for session tokens; auto-generated into `data/session-secret.key` on first run, set it explicitly for any non-local deployment
 
 > ⚠️ By default ArguMesh listens on localhost only. For a public deployment: change the `admin` password, set `APP_ACCESS_TOKEN` explicitly, and put HTTPS in front (e.g. Caddy / Nginx).
+
+## Changelog
+
+### v0.1 — Foundation research workbench
+- React 19 + Vite 6 frontend, Hono 4 (`@hono/node-server`) backend, local SQLite (libSQL `file:`) + Drizzle.
+- DB-backed accounts (PBKDF2-SHA256 passwords + HMAC sessions) with per-account data isolation.
+- Project → Literature (DOI / arXiv / URL import, batch PDF ≤ 25 MB, reading status) → Evidence Matrix (papers × dimensions, AI extraction + human verification with locking).
+- PDF reader (pdf.js + OCR), selection-based notes, Paper Card, global search, task center.
+- Migrations 0000–0006: projects / papers / paper_files / project_papers / matrices / matrix_papers / dimensions / evidence_cells / extraction_jobs / accounts / ai_settings.
+
+### v0.2 — AI-first reshape
+- Extracted the `server/ai/` AI capability layer (`completeJson` / `completeText` primitives + centralized prompts), slimming routes; unified Zod validation + provenance for all AI output.
+- Three-entry AI workbench: a Sidebar "AI assistant" trigger, a ProjectHome AI Hero, and a Cmd+K command palette (Research Agent launcher).
+- Per-account AI config (Settings page: Base URL / API Key / model; key server-side only), overriding the env fallback.
+- Reader AI (summarize / translate / ask) — submits only the selected text, page, and question (minimal exposure).
+- Workflow-style sidebar: main rail "Overview / Library / Matrix / Ideas" + "All projects", with downstream tools folded under "More".
+
+### v0.3 — Research arc (2026-08-23)
+- **Research Core**: `research_questions` as the spine + `rq_papers` many-to-many linking.
+- **Knowledge → Gap → Idea → Experiment** chain, each a first-class object with a state machine and provenance (`source` / `model` / `generatedAt`).
+- **Evidence Layers**: refine a quote through `raw → interpretation → implication`, with explicit user-triggered promotion into knowledge / gap / idea.
+- Migration `0007_last_deathbird` adds 13 research-arc tables. Run `pnpm run db:migrate` (or a fresh `db:seed`) to apply.
+- Admin cross-account data access (in the Cloudflare `prototype/` edition) is intentionally not part of this open-source edition.
 
 ## Data & backup
 

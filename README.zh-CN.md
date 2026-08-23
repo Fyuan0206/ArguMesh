@@ -70,20 +70,6 @@ Note、Claim、Evidence 统一管理,链接到论文与页码——Idea 的原�
 ### 自带 AI 配置
 每个账号可在「设置」页配置自己的 OpenAI 兼容接口——Base URL(默认 `https://api.openai.com/v1`)、API Key、模型名称。密钥只存服务端,永不回传浏览器。未配置 AI 时全部人工流程照常可用,AI 功能返回指向设置页的「AI 未配置」提示。
 
-### 研究弧(研究问题 → 知识 → 缺口 → Idea → 实验)
-从研究问题到实验方案的结构化路径。**研究问题(Research Question)**是脊柱,论文、知识、缺口、Idea 都挂在它下面。**知识(Knowledge)**对象(Note / Claim / Evidence,带来源与页码溯源)喂养 **缺口(Gap)** 发现(AI 辅助或手工),缺口可转化为 **Idea**(6 段画布:问题 / 缺口 / 假设 / 方法 / 实验 / 风险,保留版本历史),Idea 再关联 **实验(Experiment)**(append-only 的跑动结果)。**证据分层(Evidence Layer)** 把单条原文逐层提炼为理解(interpretation)→ 启发(implication),并可显式晋升为知识 / 缺口 / Idea。所有 AI 生成对象一律以 draft 落库并记录模型与时间戳,已确认/锁定的内容不会被批量 AI 静默覆盖。
-
-## 更新记录
-
-### v0.3 — 研究弧(2026-08-23)
-- **Research Core**:以 `research_questions` 为脊柱 + `rq_papers` 多对多关联。
-- **知识 → 缺口 → Idea → 实验**主链,每个对象都是一等公民,带状态机与溯源(`source` / `model` / `generatedAt`)。
-- **证据分层**:单条原文经 `raw → interpretation → implication` 逐层提炼,用户显式触发晋升为知识 / 缺口 / Idea。
-- **AI capability layer**(`server/ai/`):统一 `completeJson` / `completeText` 原语 + 按任务组织的 prompt;AI 输出经 Zod 校验并对抗提示注入。
-- 新前端页面:研究问题 / 缺口 / 实验(项目作用域,带全局兼容路由)。
-- 迁移 `0007_last_deathbird` 新增 13 张研究弧表;执行 `pnpm run db:migrate`(或全新 `db:seed`)应用。
-- 本开源版不含 Cloudflare `prototype/` 版的 admin 跨账号数据访问。
-
 ## 解决的问题
 
 | 常见问题 | ArguMesh 的处理方式 |
@@ -145,6 +131,29 @@ pnpm run dev       # 开发模式:API(127.0.0.1:8787)+ 前端(http://localhost:5
 pnpm run build     # 类型检查 + 构建前端到 dist/
 pnpm start         # http://127.0.0.1:8787
 ```
+
+## 更新记录
+
+### v0.1 — 基础研究工作台
+- React 19 + Vite 6 前端,Hono 4(`@hono/node-server`)后端,本地 SQLite(libSQL `file:`)+ Drizzle。
+- DB 账户体系(PBKDF2-SHA256 口令 + HMAC 会话)+ 多用户数据隔离。
+- 项目 → 文献(DOI/arXiv/URL 导入、批量 PDF ≤ 25 MB、阅读状态)→ 证据矩阵(论文 × 维度,AI 提取 + 人工核验锁定)。
+- PDF 阅读器(pdf.js + OCR)、划选笔记、Paper Card、全局搜索、任务中心。
+- 迁移 0000–0006:projects / papers / paper_files / project_papers / matrices / matrix_papers / dimensions / evidence_cells / extraction_jobs / accounts / ai_settings。
+
+### v0.2 — AI-first 形态重塑
+- 抽出 `server/ai/` AI capability layer(completeJson / completeText 原语 + 集中 prompts),route 瘦身,AI 输出统一 Zod 校验 + provenance。
+- 三入口 AI 工作台:Sidebar「AI 助手」触发点、ProjectHome AI Hero、Cmd+K 命令面板(Research Agent launcher)。
+- 账号级 AI 配置(设置页,Base URL / API Key / 模型,密钥只存服务端),优于环境变量兜底。
+- 阅读器阅读/划选 AI(概括、翻译、问答),只提交选中原文 + 页码 + 问题,最小暴露。
+- 侧栏 Workflow 化:主栏「概览 / 文献 / 矩阵 / Ideas」+「所有项目」,下游能力收进「更多」折叠。
+
+### v0.3 — 研究弧(2026-08-23)
+- **Research Core**:以 `research_questions` 为脊柱 + `rq_papers` 多对多关联。
+- **知识 → 缺口 → Idea → 实验**主链,每个对象都是一等公民,带状态机与溯源(`source` / `model` / `generatedAt`)。
+- **证据分层(Evidence Layer)**:单条原文经 `raw → interpretation → implication` 逐层提炼,用户显式触发晋升为知识 / 缺口 / Idea。
+- 迁移 `0007_last_deathbird` 新增 13 张研究弧表;执行 `pnpm run db:migrate`(或全新 `db:seed`)应用。
+- 本开源版不含 Cloudflare `prototype/` 版的 admin 跨账号数据访问(owner-only 守门)。
 
 所有配置均可选(参考 `.env.example`):
 
