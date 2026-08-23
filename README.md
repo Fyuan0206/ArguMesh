@@ -18,12 +18,17 @@ ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research wo
 
 ## Features
 
-### Project-first workspace
-Sign in and you land on your project list. Click a project and the workspace scopes to it: literature, evidence matrices, and ideas are all organized inside the project, while cross-project tools (knowledge base, task center, global search) stay one click away in the sidebar.
+### Project-first, AI-first workspace
+Sign in and you land on your project list. Enter a project and the workspace scopes literature, evidence, knowledge, gaps, ideas, research questions, and experiments to that research context. The project home now starts with an AI research prompt and a compact overview of the assets already available to the agent.
 
 <img src="./docs/screenshots/projects.png" alt="Project list — create, search, and enter research projects" width="900" />
 
 <img src="./docs/screenshots/project-home.png" alt="Project home — literature, matrix, ideas, and knowledge at a glance" width="900" />
+
+### Research Agent
+Open the Research Agent from anywhere in the workspace. It turns a research direction into explicit actions — discover gaps, analyze the knowledge base, organize literature, build an evidence matrix, develop ideas, or plan experiments — while preserving the active project context.
+
+<img src="./docs/screenshots/research-agent.png" alt="Research Agent — project-aware AI actions for the research workflow" width="900" />
 
 ### Literature library
 Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 核心文献), favorites, tags, and per-project notes.
@@ -45,10 +50,19 @@ The core of ArguMesh: papers as columns × research dimensions as rows. AI extra
 
 <img src="./docs/screenshots/matrix.png" alt="Evidence Matrix — papers × dimensions, with source-linked verification" width="900" />
 
+### Research arc: question → gap → idea → experiment
+Research Questions act as the spine of a project. Evidence can be refined into explicit Gaps, developed into versioned Ideas, and turned into Experiments with executable plans and result tracking. Each stage keeps provenance instead of collapsing the workflow into a one-off AI chat.
+
+<img src="./docs/screenshots/research-questions.png" alt="Research Questions — the project spine linking papers, gaps, and ideas" width="900" />
+
+<img src="./docs/screenshots/research-gaps.png" alt="Research Gaps — AI-assisted and manually curated opportunity tracking" width="900" />
+
 ### Idea workflow
 Ideas move through a kanban board (Inbox → Draft → Reviewing → Approved → Experimenting → Writing → Archived). The Idea Canvas links Problem, Gap, Hypothesis, Method, Experiment, and Risks to the evidence behind them, and every save keeps a version history.
 
 <img src="./docs/screenshots/ideas.png" alt="Idea workflow — Inbox, Draft, Reviewing, and Approved columns" width="900" />
+
+<img src="./docs/screenshots/experiments.png" alt="Experiments — turn approved ideas into executable research plans" width="900" />
 
 ### Knowledge base
 Notes, Claims, and Evidence in one place, linked to their papers and pages — the raw material your Ideas are built from.
@@ -63,11 +77,17 @@ Search across projects from one box. Results stay scoped to your account.
 ### Task center
 Every AI job (matrix extraction, PDF parsing…) shows its scope, model, progress, and result — and can be cancelled. No invisible batch processing.
 
+<img src="./docs/screenshots/tasks.png" alt="Task center — AI job scope, progress, status, and results" width="900" />
+
 ### Accounts & isolation
 Admins manage member accounts (create, reset password, change role, delete — deleting cascades all their data). Every API call is scoped to the signed-in account; another account hitting the same resource ID gets 404. Passwords are stored as PBKDF2-SHA256; sessions are HMAC tokens kept in `sessionStorage`.
 
+<img src="./docs/screenshots/users.png" alt="User management — create accounts, assign roles, reset passwords, and remove users" width="900" />
+
 ### Bring your own AI
 Each account configures its own OpenAI-compatible endpoint in Settings — Base URL (default `https://api.openai.com/v1`), API Key, and model name. Keys are stored server-side and never returned to the browser. With no AI configured, every manual workflow still works; AI features return a clear "AI not configured" notice pointing at the settings page.
+
+<img src="./docs/screenshots/settings.png" alt="Settings — personal preferences, model provider, search tools, and local data controls" width="900" />
 
 ## Why ArguMesh
 
@@ -149,7 +169,7 @@ All configuration is optional — see `.env.example`:
 - Reader AI (summarize / translate / ask) — submits only the selected text, page, and question (minimal exposure).
 - Workflow-style sidebar: main rail "Overview / Library / Matrix / Ideas" + "All projects", with downstream tools folded under "More".
 
-### v0.3 — Research arc (2026-08-23)
+### v3.2 — Research arc and AI-first workspace (2026-08-24)
 - **Research Core**: `research_questions` as the spine + `rq_papers` many-to-many linking.
 - **Knowledge → Gap → Idea → Experiment** chain, each a first-class object with a state machine and provenance (`source` / `model` / `generatedAt`).
 - **Evidence Layers**: refine a quote through `raw → interpretation → implication`, with explicit user-triggered promotion into knowledge / gap / idea.

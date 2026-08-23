@@ -148,7 +148,7 @@ pnpm start         # http://127.0.0.1:8787
 - 阅读器阅读/划选 AI(概括、翻译、问答),只提交选中原文 + 页码 + 问题,最小暴露。
 - 侧栏 Workflow 化:主栏「概览 / 文献 / 矩阵 / Ideas」+「所有项目」,下游能力收进「更多」折叠。
 
-### v0.3 — 研究弧(2026-08-23)
+### v3.2 — 研究弧与 AI-first 工作台(2026-08-24)
 - **Research Core**:以 `research_questions` 为脊柱 + `rq_papers` 多对多关联。
 - **知识 → 缺口 → Idea → 实验**主链,每个对象都是一等公民,带状态机与溯源(`source` / `model` / `generatedAt`)。
 - **证据分层(Evidence Layer)**:单条原文经 `raw → interpretation → implication` 逐层提炼,用户显式触发晋升为知识 / 缺口 / Idea。

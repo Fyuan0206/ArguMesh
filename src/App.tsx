@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
+import { CommandPalette } from "./components/ai/CommandPalette";
 import { IdeasPage } from "./pages/IdeasPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { MatricesIndexPage } from "./pages/MatricesIndexPage";
@@ -46,6 +47,7 @@ function AppShell() {
       <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((open) => !open)} />
       <section className={`workspace ${isMatrix || isReader ? "" : "route-workspace"} ${isReader ? "reader-workspace" : ""}`}>
         <Outlet />
+        <CommandPalette />
       </section>
     </main>
   );
