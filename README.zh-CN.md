@@ -53,6 +53,9 @@ Note、Claim、Evidence 统一管理,链接到论文与页码——Idea 的原�
 
 <img src="./docs/screenshots/knowledge.png" alt="知识库：笔记、主张与证据统一管理" width="900" />
 
+### 自带 AI 配置
+每个账号可在「设置」页配置自己的 OpenAI 兼容接口——Base URL(默认 `https://api.openai.com/v1`)、API Key、模型名称。密钥只存服务端,永不回传浏览器。未配置 AI 时全部人工流程照常可用,AI 功能返回指向设置页的「AI 未配置」提示。
+
 ### 全局搜索
 一个搜索框覆盖全部项目与文献,结果始终限定在当前账号。
 
@@ -66,6 +69,20 @@ Note、Claim、Evidence 统一管理,链接到论文与页码——Idea 的原�
 
 ### 自带 AI 配置
 每个账号可在「设置」页配置自己的 OpenAI 兼容接口——Base URL(默认 `https://api.openai.com/v1`)、API Key、模型名称。密钥只存服务端,永不回传浏览器。未配置 AI 时全部人工流程照常可用,AI 功能返回指向设置页的「AI 未配置」提示。
+
+### 研究弧(研究问题 → 知识 → 缺口 → Idea → 实验)
+从研究问题到实验方案的结构化路径。**研究问题(Research Question)**是脊柱,论文、知识、缺口、Idea 都挂在它下面。**知识(Knowledge)**对象(Note / Claim / Evidence,带来源与页码溯源)喂养 **缺口(Gap)** 发现(AI 辅助或手工),缺口可转化为 **Idea**(6 段画布:问题 / 缺口 / 假设 / 方法 / 实验 / 风险,保留版本历史),Idea 再关联 **实验(Experiment)**(append-only 的跑动结果)。**证据分层(Evidence Layer)** 把单条原文逐层提炼为理解(interpretation)→ 启发(implication),并可显式晋升为知识 / 缺口 / Idea。所有 AI 生成对象一律以 draft 落库并记录模型与时间戳,已确认/锁定的内容不会被批量 AI 静默覆盖。
+
+## 更新记录
+
+### v0.3 — 研究弧(2026-08-23)
+- **Research Core**:以 `research_questions` 为脊柱 + `rq_papers` 多对多关联。
+- **知识 → 缺口 → Idea → 实验**主链,每个对象都是一等公民,带状态机与溯源(`source` / `model` / `generatedAt`)。
+- **证据分层**:单条原文经 `raw → interpretation → implication` 逐层提炼,用户显式触发晋升为知识 / 缺口 / Idea。
+- **AI capability layer**(`server/ai/`):统一 `completeJson` / `completeText` 原语 + 按任务组织的 prompt;AI 输出经 Zod 校验并对抗提示注入。
+- 新前端页面:研究问题 / 缺口 / 实验(项目作用域,带全局兼容路由)。
+- 迁移 `0007_last_deathbird` 新增 13 张研究弧表;执行 `pnpm run db:migrate`(或全新 `db:seed`)应用。
+- 本开源版不含 Cloudflare `prototype/` 版的 admin 跨账号数据访问。
 
 ## 解决的问题
 

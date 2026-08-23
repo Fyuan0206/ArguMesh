@@ -14,6 +14,9 @@ import { PaperPage } from "./pages/PaperPage";
 import { SearchPage } from "./pages/SearchPage";
 import { TasksPage } from "./pages/TasksPage";
 import { UsersPage } from "./pages/UsersPage";
+import { ResearchQuestionsPage } from "./pages/ResearchQuestionsPage";
+import { GapsPage } from "./pages/GapsPage";
+import { ExperimentsPage } from "./pages/ExperimentsPage";
 import { useAuth } from "./state/auth";
 import { ProjectProvider } from "./state/project";
 import { WorkspaceProvider } from "./state/workspace";
@@ -69,6 +72,13 @@ export function App() {
             <Route path="/projects/:projectId/library/:paperId/read" element={<Suspense fallback={<div className="reader-route-loading">正在加载 PDF 阅读器…</div>}><ReaderPage /></Suspense>} />
             <Route path="/projects/:projectId/matrices" element={<MatricesIndexPage />} />
             <Route path="/projects/:projectId/matrices/:matrixId" element={<MatrixPage />} />
+            {/* 研究弧(v2.0):Research Question 脊柱 / Gap / Experiment,均项目作用域。全局路由由 ProjectGate 处理无 projectId 情况。 */}
+            <Route path="/projects/:projectId/questions" element={<ResearchQuestionsPage />} />
+            <Route path="/projects/:projectId/gaps" element={<GapsPage />} />
+            <Route path="/projects/:projectId/experiments" element={<ExperimentsPage />} />
+            <Route path="/questions" element={<ResearchQuestionsPage />} />
+            <Route path="/gaps" element={<GapsPage />} />
+            <Route path="/experiments" element={<ExperimentsPage />} />
             {/* 旧链接兼容:/matrices(全局矩阵列表)与 /knowledge/matrices/:matrixId(矩阵详情)。 */}
             <Route path="/matrices" element={<MatricesIndexPage />} />
             <Route path="/knowledge/matrices/:projectId" element={<MatrixPage />} />

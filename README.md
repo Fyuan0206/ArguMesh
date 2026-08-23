@@ -69,6 +69,20 @@ Admins manage member accounts (create, reset password, change role, delete — d
 ### Bring your own AI
 Each account configures its own OpenAI-compatible endpoint in Settings — Base URL (default `https://api.openai.com/v1`), API Key, and model name. Keys are stored server-side and never returned to the browser. With no AI configured, every manual workflow still works; AI features return a clear "AI not configured" notice pointing at the settings page.
 
+### Research arc (Research Question → Knowledge → Gap → Idea → Experiment)
+A structured path from a research question to an experiment plan. A **Research Question** is the spine that papers, knowledge, gaps, and ideas hang off. **Knowledge** items (notes / claims / evidence with source + page provenance) feed **Gap** discovery (AI-assisted or manual), gaps convert into **Ideas** with a 6-section canvas (problem / gap / hypothesis / method / experiment / risks) and version history, and ideas link to **Experiments** with append-only run results. **Evidence Layers** refine a single quote into interpretation → implication, and can be promoted into knowledge / gap / idea. All AI-generated objects are saved as drafts with model + timestamp provenance, and lock-in (`confirmed` / `locked`) is never silently overwritten by batch AI runs.
+
+## Changelog
+
+### v0.3 — Research arc (2026-08-23)
+- **Research Core** (`research_questions` as the spine) + `rq_papers` many-to-many linking.
+- **Knowledge → Gap → Idea → Experiment** chain, each a first-class object with a state machine and provenance (`source` / `model` / `generatedAt`).
+- **Evidence Layers**: refine a quote through `raw → interpretation → implication`, with explicit user-triggered promotion into knowledge / gap / idea.
+- **AI capability layer** (`server/ai/`): shared `completeJson` / `completeText` primitives + per-task prompts; AI output is Zod-validated and defended against prompt injection.
+- New frontend pages: Research Questions, Gaps, Experiments (project-scoped, with global fallback routes).
+- Migration `0007_last_deathbird` adds 13 research-arc tables. `pnpm run db:migrate` (or a fresh `db:seed`) to apply.
+- Admin cross-account data access (available in the Cloudflare `prototype/` edition) is intentionally not part of this open-source edition.
+
 ## Why ArguMesh
 
 | Common problem | How ArguMesh handles it |

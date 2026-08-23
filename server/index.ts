@@ -12,6 +12,13 @@ import { paperRoutes } from "./routes/papers";
 import { projectRoutes } from "./routes/projects";
 import { readerRoutes } from "./routes/reader";
 import { userRoutes } from "./routes/users";
+import { knowledgeRoutes } from "./routes/knowledge";
+import { gapRoutes } from "./routes/gaps";
+import { ideaRoutes } from "./routes/ideas";
+import { reviewRoutes } from "./routes/reviews";
+import { researchQuestionRoutes } from "./routes/researchQuestions";
+import { experimentRoutes } from "./routes/experiments";
+import { evidenceLayerRoutes } from "./routes/evidenceLayers";
 import { verifySessionToken } from "./auth/session";
 import { getAiProviders } from "./services/ai";
 import type { AppEnv } from "./types";
@@ -55,6 +62,13 @@ app.route("/api", fileRoutes);
 app.route("/api", extractionRoutes);
 app.route("/api", readerRoutes);
 app.route("/api", userRoutes);
+app.route("/api", knowledgeRoutes);
+app.route("/api", gapRoutes);
+app.route("/api", ideaRoutes);
+app.route("/api", reviewRoutes);
+app.route("/api", researchQuestionRoutes);
+app.route("/api", experimentRoutes);
+app.route("/api", evidenceLayerRoutes);
 
 app.notFound((c) => c.json({ error: "NOT_FOUND", message: "接口不存在" }, 404));
 app.onError((error, c) => {

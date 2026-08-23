@@ -426,3 +426,686 @@ export async function deleteUser(userId: string): Promise<{ userId: string; dele
     method: "DELETE", headers: authenticatedHeaders(),
   }));
 }
+
+
+// ═══ Research Arc (研究弧,v2.0):Knowledge → Gap → Idea → Review → Experiment,以 RQ 为脊柱 ═══
+
+/** 知识对象(迁移 0007):后端持久化的 Note/Claim/Evidence,带 provenance。与 evidence_cells 矩阵格是不同粒度。 */
+export interface KnowledgeItem {
+  id: string;
+  projectId: string;
+  paperId: string;
+  kind: "note" | "claim" | "evidence";
+  title: string;
+  content: string;
+  quote?: string;
+  note: string;
+  page: number;
+  location?: string | null;
+  source: "human" | "ai";
+  status: "draft" | "confirmed";
+  model?: string | null;
+  generatedAt?: string | null;
+  createdAt: string;
+}
+
+/** Research Question 研究问题(迁移 0013,v2.0 Research Core):一等对象,脊柱层。provenance 同 Knowledge。 */
+export type RqStatus = "open" | "investigating" | "evidenced" | "concluded" | "abandoned";
+export type RqSource = "human" | "ai";
+export interface RqLinkedPaper {
+  paperId: string;
+  role: string;
+  title: string;
+  shortName: string;
+  authors: string;
+  year: number;
+}
+export interface ResearchQuestion {
+  id: string;
+  projectId: string;
+  question: string;
+  goal: string;
+  status: RqStatus;
+  source: RqSource;
+  model: string | null;
+  generatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  papers: RqLinkedPaper[];
+}
+
+/** Gap 缺口(迁移 0009):研究缺口一等对象,带状态机。provenance 同 Knowledge。 */
+export type GapStatus = "candidate" | "searching" | "evidenced" | "converted" | "rejected";
+export type GapSource = "human" | "ai";
+export interface Gap {
+  id: string;
+  projectId: string;
+  paperId: string | null;
+  rqId: string | null;
+  title: string;
+  description: string;
+  rationale: string;
+  note: string;
+  status: GapStatus;
+  source: GapSource;
+  model: string | null;
+  generatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+/** 缺口挂载的知识证据(gap_evidence 表)。 */
+export interface GapEvidenceLink {
+  id: string;
+  knowledgeItemId: string;
+  stance: "supports" | "contradicts" | "context";
+}
+
+/** Idea 一等对象(迁移 0010):研究想法,围绕 Version 设计(C7)。与 workspace 的 LocalIdea 对应。 */
+export type IdeaStatus = "Inbox" | "Draft" | "Reviewing" | "Revise" | "Approved" | "Experimenting" | "Writing" | "Archived";
+
+/** 6 段式研究画布(与后端 IdeaCanvas 一致)。 */
+export interface IdeaCanvas {
+  problem: string;
+  gap: string;
+  hypothesis: string;
+  method: string;
+  experiment: string;
+  risks: string;
+}
+
+/** Idea 的一个不可变版本快照(C7)。 */
+export interface IdeaVersion {
+  id: string;
+  ideaId: string;
+  versionNo: number;
+  title: string;
+  summary: string;
+  canvas: IdeaCanvas;
+  rationale: string;
+  createdBy: "human" | "ai";
+  model: string | null;
+  generatedAt: string | null;
+  createdAt: string;
+}
+
+/** Idea 关联的知识证据(idea_evidence 表)。 */
+export interface IdeaEvidenceLink {
+  id: string;
+  knowledgeItemId: string;
+  role: "supports" | "contradicts" | "context";
+}
+
+/** Idea 一等对象(含当前版本 + 证据;单条 GET 还附全部历史版本)。 */
+export interface Idea {
+  id: string;
+  projectId: string;
+  sourceGapId: string | null;
+  rqId: string | null;
+  title: string;
+  summary: string;
+  status: IdeaStatus;
+  currentVersionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  currentVersion: IdeaVersion | null;
+  evidence: IdeaEvidenceLink[];
+  versions?: IdeaVersion[];
+}
+export async function createKnowledge(
+  projectId: string,
+  input: { paperId: string; kind: "note" | "claim" | "evidence"; title: string; content: string; quote?: string; note?: string; page?: number; status?: "draft" | "confirmed" },
+): Promise<{ item: KnowledgeItem }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** Reader 划选 AI 提炼:后端按 quote+page+paperId 生成并直接存 draft,返回带 provenance 的 KnowledgeItem。 */
+export async function extractKnowledge(
+  projectId: string,
+  input: { paperId: string; quote: string; page: number },
+): Promise<{ item: KnowledgeItem }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge/extract`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 列出某项目的全部知识对象(本项目 + 本账号隔离)。 */
+export async function listKnowledge(projectId: string): Promise<{ items: KnowledgeItem[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 人工修改知识对象(含 draft→confirmed 确认)。 */
+export async function patchKnowledge(
+  projectId: string,
+  knowledgeId: string,
+  patch: Partial<Pick<KnowledgeItem, "title" | "content" | "note" | "kind" | "status">>,
+): Promise<{ item: KnowledgeItem }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge/${encodeURIComponent(knowledgeId)}`, {
+    method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
+  }));
+}
+
+/** 删除知识对象。 */
+export async function deleteKnowledge(projectId: string, knowledgeId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge/${encodeURIComponent(knowledgeId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 知识关系(迁移 0008):supports / contradicts / duplicates。前端传顺序无关,后端规范化去重。 */
+export type KnowledgeRelationType = "supports" | "contradicts" | "duplicates";
+
+export interface KnowledgeRelation {
+  id: string;
+  itemIdA: string;
+  itemIdB: string;
+  type: KnowledgeRelationType;
+  note: string;
+  createdAt: string;
+  /** 后端 enrichment 的两端标题。 */
+  titleA?: string;
+  titleB?: string;
+}
+
+/** 创建关系(幂等:已存在则返回 200 原记录)。 */
+export async function createKnowledgeRelation(
+  projectId: string,
+  input: { itemIdA: string; itemIdB: string; type: KnowledgeRelationType; note?: string },
+): Promise<{ relation: KnowledgeRelation }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge/relations`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 列出本项目全部知识关系(含两端标题)。 */
+export async function listKnowledgeRelations(projectId: string): Promise<{ relations: KnowledgeRelation[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge/relations`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 删除一条知识关系。 */
+export async function deleteKnowledgeRelation(projectId: string, relationId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge/relations/${encodeURIComponent(relationId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+// ─── Gap 缺口(迁移 0009):Gap 一等对象 + gap_evidence + Gap Discovery ───
+
+/** 人工创建一条缺口(后端权威源,candidate,source:human)。 */
+export async function createGap(
+  projectId: string,
+  input: { paperId?: string; title: string; description?: string; rationale?: string; note?: string },
+): Promise<{ gap: Gap }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 列出某项目的全部缺口(每条附挂载的证据 id 列表)。 */
+export async function listGaps(projectId: string): Promise<{ gaps: Array<Gap & { evidence: GapEvidenceLink[] }> }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 修改缺口(含状态流转:传入 status 走后端状态机校验)。 */
+export async function patchGap(
+  projectId: string,
+  gapId: string,
+  patch: Partial<Pick<Gap, "title" | "description" | "rationale" | "note" | "status">> & { convertedIdeaId?: string },
+): Promise<{ gap: Gap }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps/${encodeURIComponent(gapId)}`, {
+    method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
+  }));
+}
+
+/** 删除缺口(级联清 gap_evidence)。 */
+export async function deleteGap(projectId: string, gapId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps/${encodeURIComponent(gapId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 给缺口挂一条知识证据(幂等:已挂则更新 stance)。 */
+export async function addGapEvidence(
+  projectId: string,
+  gapId: string,
+  input: { knowledgeItemId: string; stance: "supports" | "contradicts" | "context"; note?: string },
+): Promise<{ evidence: { id: string } }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps/${encodeURIComponent(gapId)}/evidence`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 摘掉一条缺口证据。 */
+export async function deleteGapEvidence(projectId: string, gapId: string, evidenceId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps/${encodeURIComponent(gapId)}/evidence/${encodeURIComponent(evidenceId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** AI 从本项目知识发现缺口(后端直接存 candidate,source:ai)。 */
+export async function discoverGaps(projectId: string): Promise<{ gaps: Gap[]; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps/discover`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
+  }));
+}
+
+// ─── Research Question 研究问题(迁移 0013,v2.0):脊柱层,Paper/Gap/Idea 挂到它上面 ───
+
+/** 创建一个研究问题(可选同时关联 paperIds;均须属本项目)。 */
+export async function createResearchQuestion(
+  projectId: string,
+  input: { question: string; goal?: string; paperIds?: string[] },
+): Promise<{ researchQuestion: ResearchQuestion }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-questions`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 列出某项目全部研究问题(每条附关联论文)。 */
+export async function listResearchQuestions(projectId: string): Promise<{ researchQuestions: ResearchQuestion[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-questions`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 单条研究问题(含关联论文)。 */
+export async function getResearchQuestion(projectId: string, rqId: string): Promise<{ researchQuestion: ResearchQuestion }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-questions/${encodeURIComponent(rqId)}`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 修改研究问题(传 status 走后端状态机校验)。 */
+export async function patchResearchQuestion(
+  projectId: string,
+  rqId: string,
+  patch: Partial<Pick<ResearchQuestion, "question" | "goal" | "status">>,
+): Promise<{ researchQuestion: ResearchQuestion }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-questions/${encodeURIComponent(rqId)}`, {
+    method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
+  }));
+}
+
+/** 删除研究问题(级联清 rq_papers;gaps/ideas 的 rqId 置空)。 */
+export async function deleteResearchQuestion(projectId: string, rqId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-questions/${encodeURIComponent(rqId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 给研究问题关联一篇论文(幂等;论文须属本项目)。 */
+export async function linkRqPaper(
+  projectId: string,
+  rqId: string,
+  input: { paperId: string; role?: string },
+): Promise<{ link: { rqId: string; paperId: string; role: string } }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-questions/${encodeURIComponent(rqId)}/papers`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 摘掉研究问题的一篇论文关联。 */
+export async function unlinkRqPaper(projectId: string, rqId: string, paperId: string): Promise<{ rqId: string; paperId: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-questions/${encodeURIComponent(rqId)}/papers/${encodeURIComponent(paperId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+// ─── Experiment 实验(迁移 0014,v2.0):Idea → Experiment → Result,result append-only(C7) ───
+
+export type ExperimentStatus = "planned" | "running" | "done" | "failed";
+export type ExperimentSource = "human" | "ai";
+export interface ExperimentResult {
+  id: string;
+  experimentId: string;
+  runNo: number;
+  metrics: Record<string, unknown>;
+  figures: unknown[];
+  notes: string;
+  createdAt: string;
+}
+
+// ─── Evidence Layer 证据三层(迁移 0015,v2.0):raw(quote) → interpretation(理解) → implication(启发/假设) ───
+
+export type EvidenceLayerLevel = "raw" | "interpretation" | "implication";
+export type EvidenceLayerSource = "human" | "ai";
+export interface EvidenceLayer {
+  id: string;
+  projectId: string;
+  paperId: string;
+  knowledgeItemId: string | null;
+  parentId: string | null;
+  level: EvidenceLayerLevel;
+  content: string;
+  quote: string;
+  page: number;
+  location: string | null;
+  status: "draft" | "confirmed";
+  promotedTo: string | null;
+  source: EvidenceLayerSource;
+  model: string | null;
+  generatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface Experiment {
+  id: string;
+  projectId: string;
+  ideaId: string | null;
+  rqId: string | null;
+  title: string;
+  hypothesis: string;
+  config: Record<string, unknown>;
+  repoUrl: string;
+  commitHash: string;
+  checkpointPath: string;
+  status: ExperimentStatus;
+  conclusion: string;
+  source: ExperimentSource;
+  model: string | null;
+  generatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  results: ExperimentResult[];
+}
+
+/** 创建一个实验(可选挂 ideaId/rqId;均须属本项目)。 */
+export async function createExperiment(
+  projectId: string,
+  input: { title: string; ideaId?: string; rqId?: string; hypothesis?: string; config?: Record<string, unknown>; repoUrl?: string; commitHash?: string; checkpointPath?: string },
+): Promise<{ experiment: Experiment }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 列出某项目全部实验(每条附 append-only 结果)。 */
+export async function listExperiments(projectId: string): Promise<{ experiments: Experiment[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 单条实验(含 append-only 结果)。 */
+export async function getExperiment(projectId: string, experimentId: string): Promise<{ experiment: Experiment }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 修改实验(传 status 走后端状态机;config 作为对象传入,后端转 JSON)。 */
+export async function patchExperiment(
+  projectId: string,
+  experimentId: string,
+  patch: Partial<Pick<Experiment, "title" | "hypothesis" | "status" | "conclusion" | "repoUrl" | "commitHash" | "checkpointPath">> & { config?: Record<string, unknown> },
+): Promise<{ experiment: Experiment }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}`, {
+    method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
+  }));
+}
+
+/** 删除实验(级联清 append-only 结果)。 */
+export async function deleteExperiment(projectId: string, experimentId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 追加一次跑动结果(append-only,不覆盖旧结果)。 */
+export async function addExperimentResult(
+  projectId: string,
+  experimentId: string,
+  input: { metrics?: Record<string, unknown>; figures?: unknown[]; notes?: string },
+): Promise<{ result: ExperimentResult }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/results`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 删除一条结果(append-only 模型的谨慎操作)。 */
+export async function deleteExperimentResult(projectId: string, experimentId: string, resultId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/results/${encodeURIComponent(resultId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 列出证据层(可按 paperId / knowledgeItemId 过滤)。 */
+export async function listEvidenceLayers(
+  projectId: string,
+  query?: { paperId?: string; knowledgeItemId?: string },
+): Promise<{ layers: EvidenceLayer[] }> {
+  const params = new URLSearchParams();
+  if (query?.paperId) params.set("paperId", query.paperId);
+  if (query?.knowledgeItemId) params.set("knowledgeItemId", query.knowledgeItemId);
+  const qs = params.toString();
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/evidence-layers${qs ? `?${qs}` : ""}`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 人工创建一层(raw/interpretation/implication)。人工创建一律 confirmed;paperId 须属本项目。 */
+export async function createEvidenceLayer(
+  projectId: string,
+  input: { paperId: string; knowledgeItemId?: string; parentId?: string; level?: EvidenceLayerLevel; content: string; quote?: string; page?: number; location?: string },
+): Promise<{ layer: EvidenceLayer }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/evidence-layers`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 修改一层(可改 content/quote/location/status;draft→confirmed 在这里发生)。 */
+export async function patchEvidenceLayer(
+  projectId: string,
+  layerId: string,
+  patch: Partial<Pick<EvidenceLayer, "content" | "quote" | "location" | "status">>,
+): Promise<{ layer: EvidenceLayer }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/evidence-layers/${encodeURIComponent(layerId)}`, {
+    method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
+  }));
+}
+
+/** 删除一层(子层不级联)。 */
+export async function deleteEvidenceLayer(projectId: string, layerId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/evidence-layers/${encodeURIComponent(layerId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 确认一层(draft → confirmed)。用户确认入口,AI 层只能经此升级。 */
+export async function confirmEvidenceLayer(projectId: string, layerId: string): Promise<{ layer: EvidenceLayer }> {
+  return patchEvidenceLayer(projectId, layerId, { status: "confirmed" });
+}
+
+/** AI 基于一层生成 interpretation(后端直存 draft,source:ai)。 */
+export async function interpretEvidenceLayer(projectId: string, layerId: string): Promise<{ layer: EvidenceLayer; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/evidence-layers/${encodeURIComponent(layerId)}/interpret`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
+  }));
+}
+
+/** AI 基于一层生成 implication(后端直存 draft,source:ai)。 */
+export async function implyEvidenceLayer(projectId: string, layerId: string): Promise<{ layer: EvidenceLayer; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/evidence-layers/${encodeURIComponent(layerId)}/imply`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
+  }));
+}
+
+/** 晋升一层(confirmed → knowledge | gap | idea)。用户显式触发,永不自动。后端拒绝未确认或已晋升的层。 */
+export async function promoteEvidenceLayer(projectId: string, layerId: string, target: "knowledge" | "gap" | "idea", title?: string): Promise<{ target: string; id: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/evidence-layers/${encodeURIComponent(layerId)}/promote`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({ target, title }),
+  }));
+}
+
+/** 新建一条 Idea(可选从缺口转换:传 sourceGapId)。落初始版本 1。 */
+export async function createIdea(
+  projectId: string,
+  input: { title: string; summary?: string; sourceGapId?: string; canvas?: Partial<IdeaCanvas> },
+): Promise<{ idea: Idea }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 列出某项目的全部 Idea(每条附当前版本 + 证据)。 */
+export async function listIdeas(projectId: string): Promise<{ ideas: Idea[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 单条 Idea(含当前版本 + 全部历史版本 + 证据)。 */
+export async function getIdea(projectId: string, ideaId: string): Promise<{ idea: Idea }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 修改 Idea:传 canvas 落一条新版本(C7),否则只改 title/summary/status。 */
+export async function patchIdea(
+  projectId: string,
+  ideaId: string,
+  patch: { title?: string; summary?: string; status?: IdeaStatus; canvas?: Partial<IdeaCanvas>; rationale?: string },
+): Promise<{ idea: Idea }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}`, {
+    method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
+  }));
+}
+
+/** 删除 Idea(级联清版本 + 证据)。 */
+export async function deleteIdea(projectId: string, ideaId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 给 Idea 挂一条知识证据(幂等:已挂则更新 role)。 */
+export async function addIdeaEvidence(
+  projectId: string,
+  ideaId: string,
+  input: { knowledgeItemId: string; role?: "supports" | "contradicts" | "context"; note?: string },
+): Promise<{ evidence: { id: string } }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/evidence`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 摘掉一条 Idea 证据。 */
+export async function deleteIdeaEvidence(projectId: string, ideaId: string, evidenceId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/evidence/${encodeURIComponent(evidenceId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 恢复 Idea 到某历史版本:后端复制该版本画布成一条新版本并设为当前(不覆盖旧版,C7)。 */
+export async function restoreIdeaVersion(projectId: string, ideaId: string, versionId: string): Promise<{ idea: Idea }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/restore`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ versionId }),
+  }));
+}
+
+/** AI 重新起草 6 段画布:基于当前画布 + 可选修改指令,后端落一条 ai 新版本(C7)。 */
+export async function regenerateIdeaCanvas(
+  projectId: string,
+  ideaId: string,
+  input: { instruction?: string } = {},
+): Promise<{ idea: Idea; versionId: string; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/regenerate`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** AI 起草 6 段画布(后端直接落一条 ai 新版本,C7)。 */
+export async function draftIdeaCanvas(projectId: string, ideaId: string): Promise<{ idea: Idea; versionId: string; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/draft`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
+  }));
+}
+
+/** 评审建议(idea_reviews.suggestions_json 的单条)。 */
+export interface ReviewSuggestion {
+  id: string;
+  target: string;
+  issue: string;
+  suggestion: string;
+  priority: "high" | "medium" | "low";
+}
+
+/** Idea 评审(迁移 0012)。 */
+export interface IdeaReview {
+  id: string;
+  ideaId: string;
+  reviewer: string;
+  verdict: "strong" | "viable" | "weak" | "reject";
+  strengths: string;
+  weaknesses: string;
+  risks: string;
+  suggestions: ReviewSuggestion[];
+  source: "human" | "ai";
+  model: string | null;
+  generatedAt: string | null;
+  reviewedVersionId: string | null;
+  revisedVersionId: string | null;
+  status: "open" | "applied" | "dismissed";
+  createdAt: string;
+}
+
+/** AI 评审当前版本(后端直接落库,source:ai)。 */
+export async function reviewIdea(projectId: string, ideaId: string): Promise<{ review: IdeaReview; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/reviews/ai`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
+  }));
+}
+
+/** 列出某 Idea 的全部评审(最新在前)。 */
+export async function listIdeaReviews(projectId: string, ideaId: string): Promise<{ reviews: IdeaReview[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/reviews`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 删除一条评审。 */
+export async function deleteIdeaReview(projectId: string, ideaId: string, reviewId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/reviews/${encodeURIComponent(reviewId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
+  }));
+}
+
+/** 采纳建议 → AI 修订出新版本(C7),评审标 applied。 */
+export async function applyIdeaReview(
+  projectId: string,
+  ideaId: string,
+  reviewId: string,
+  input: { suggestionIds: string[] },
+): Promise<{ idea: { id: string; status: string; currentVersionId: string }; review: IdeaReview; versionId: string; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ideas/${encodeURIComponent(ideaId)}/reviews/${encodeURIComponent(reviewId)}/apply`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** P6 Knowledge Intelligence:情报分析结果(冲突/重复/综合/缺失证据)。 */
+export interface KnowledgeConflict { aId: string; bId: string; reason: string; }
+export interface KnowledgeDuplicate { aId: string; bId: string; reason: string; }
+export interface KnowledgeMissing { topic: string; why: string; }
+export interface KnowledgeIntelligence {
+  synthesis: string;
+  conflicts: KnowledgeConflict[];
+  duplicates: KnowledgeDuplicate[];
+  missingEvidence: KnowledgeMissing[];
+}
+
+/** P6:AI 情报分析本项目知识(冲突/重复/综合/缺失证据)。无新表,纯分析。 */
+export async function analyzeKnowledge(projectId: string): Promise<{ analysis: KnowledgeIntelligence; model: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge/analyze`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
+  }));
+}
+

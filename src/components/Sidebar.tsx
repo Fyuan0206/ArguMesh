@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { NavLink, useLocation, useSearchParams } from "react-router-dom";
-import { BookOpenText, Clock, FolderSimple, GearSix, GridFour, House, Lightbulb, MagnifyingGlass, NotePencil, SidebarSimple, UsersThree } from "@phosphor-icons/react";
+import { BookOpenText, Clock, Flask, FolderSimple, GearSix, GridFour, House, Lightbulb, MagnifyingGlass, NotePencil, Question, SidebarSimple, UsersThree } from "@phosphor-icons/react";
 import { useAuth } from "../state/auth";
 import { useWorkspace } from "../state/workspace";
 import { BrandMark } from "./BrandMark";
@@ -47,6 +47,9 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
         { to: `/projects/${encodeURIComponent(projectId)}`, label: "项目概览", icon: <House />, end: true },
         { to: `/projects/${encodeURIComponent(projectId)}/library`, label: "文献", icon: <BookOpenText />, prefix: `/projects/${projectId}/library` },
         { to: `/projects/${encodeURIComponent(projectId)}/matrices`, label: "矩阵", icon: <GridFour weight="fill" />, prefix: `/projects/${projectId}/matrices` },
+        { to: `/projects/${encodeURIComponent(projectId)}/questions`, label: "研究问题", icon: <MagnifyingGlass />, prefix: `/projects/${projectId}/questions` },
+        { to: `/projects/${encodeURIComponent(projectId)}/gaps`, label: "缺口", icon: <Question />, prefix: `/projects/${projectId}/gaps` },
+        { to: `/projects/${encodeURIComponent(projectId)}/experiments`, label: "实验", icon: <Flask />, prefix: `/projects/${projectId}/experiments` },
         { to: `/ideas?project=${encodeURIComponent(projectId)}`, label: "Ideas", icon: <Lightbulb />, ideasScope: true },
         { to: "/projects", label: "所有项目", icon: <FolderSimple />, end: true },
       ]
