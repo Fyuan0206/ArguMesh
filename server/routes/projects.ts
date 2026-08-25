@@ -35,6 +35,7 @@ interface ProjectRow {
   createdAt: string;
   archivedAt: string | null;
   sortOrder: number;
+  workspacePath: string | null;
 }
 
 function projectToDto(row: ProjectRow, paperCount: number) {
@@ -47,6 +48,7 @@ function projectToDto(row: ProjectRow, paperCount: number) {
     archived: Boolean(row.archivedAt),
     archivedAt: row.archivedAt,
     sortOrder: row.sortOrder,
+    workspacePath: row.workspacePath ?? null,
     paperCount,
   };
 }

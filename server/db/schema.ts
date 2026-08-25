@@ -8,6 +8,8 @@ export const projects = sqliteTable("projects", {
   createdAt: text("created_at").notNull(),
   archivedAt: text("archived_at"),
   sortOrder: integer("sort_order").notNull().default(0),
+  /** 关联的本地文件夹绝对路径(选文件夹创建项目时记录;可选,不实时跟踪移动/重命名)。 */
+  workspacePath: text("workspace_path"),
 });
 
 export const papers = sqliteTable("papers", {

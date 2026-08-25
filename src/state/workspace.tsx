@@ -24,6 +24,7 @@ export interface LocalProject {
   status: "active" | "archived";
   paperIds: string[];
   createdAt: string;
+  workspacePath?: string | null;
 }
 
 export interface LocalPaper {
@@ -220,7 +221,7 @@ export type NewPaperInput = Pick<LocalPaper, "title" | "authors" | "venue" | "ye
   Partial<Pick<LocalPaper, "abstract" | "doi" | "arxivId" | "sourceUrl" | "fileHash" | "fileName" | "fileSize" | "pageCount" | "outline">>;
 
 interface WorkspaceContextValue extends WorkspaceData {
-  addProject: (input: Pick<LocalProject, "name" | "description">) => string;
+  addProject: (input: Pick<LocalProject, "name" | "description" | "workspacePath">) => string;
   updateProject: (projectId: string, updates: Partial<Pick<LocalProject, "name" | "description">>) => void;
   /**
    * 删除项目并清理所有依赖本地状态:从每个 paper 的 projectIds 中移除该项目,
@@ -334,6 +335,7 @@ function mergeRemoteProjects(localProjects: LocalProject[], remoteProjects: api.
       status: project.archived ? "archived" as const : "active" as const,
       paperIds: local?.paperIds ?? [],
       createdAt: local?.createdAt ?? project.createdAt.slice(0, 10),
+      workspacePath: local?.workspacePath ?? project.workspacePath ?? null,
     };
   });
   return [...syncedProjects, ...localProjects.filter((project) => !remoteIds.has(project.id))];
@@ -456,7 +458,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const project: LocalProject = { id, ...input, status: "active", paperIds: [], createdAt: new Date().toISOString().slice(0, 10) };
       setData((current) => ({ ...current, projects: [project, ...current.projects] }));
       runSync(`创建项目「${input.name}」`, async () => {
-        await api.syncProject({ id, name: input.name, description: input.description });
+        await api.syncProject({ id, name: input.name, description: input.description, workspacePath: input.workspacePath ?? null });
       });
       return id;
     },

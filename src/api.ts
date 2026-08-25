@@ -141,7 +141,7 @@ export async function syncPaper(projectId: string, paper: { id: string; title: s
   }));
 }
 
-export async function syncProject(project: { id: string; name: string; description: string }) {
+export async function syncProject(project: { id: string; name: string; description: string; workspacePath?: string | null }) {
   return parseResponse<{ id: string }>(await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
     method: "PUT", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(project),
   }));
@@ -263,6 +263,7 @@ export interface RemoteProject {
   archivedAt: string | null;
   sortOrder: number;
   paperCount: number;
+  workspacePath: string | null;
 }
 
 export interface RemotePaper {

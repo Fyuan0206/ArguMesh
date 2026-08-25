@@ -111,6 +111,26 @@ async function applyMigration0008(client: Client): Promise<void> {
 }
 
 
+// ─── Migration 0009:项目关联本地文件夹(workspace_path) ───
+
+const MIGRATION_0009_HASH = "0009_workspace_path";
+
+/**
+ * 为 projects 表增加 workspace_path 列(可选)。幂等:列已存在则跳过。
+ * SQLite 的 ADD COLUMN 无 IF NOT EXISTS,故先查 PRAGMA table_info 判断。
+ */
+async function applyMigration0009(client: Client): Promise<void> {
+  const info = await client.execute("PRAGMA table_info(projects)");
+  const hasColumn = info.rows.some((r) => (r as unknown as { name: string }).name === "workspace_path");
+  if (!hasColumn) {
+    await client.execute("ALTER TABLE projects ADD COLUMN workspace_path text");
+  }
+  await client.execute({
+    sql: "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+    args: [MIGRATION_0009_HASH, 9],
+  });
+}
+
 // ─── Migration runner (逐条执行) ───
 
 /** 本地 file: 库需要 data/ 目录存在。 */
@@ -172,7 +192,7 @@ async function applyMigrationFiles(client: Client, applied: Set<string>): Promis
 }
 
 /**
- * 应用全部迁移(0000-0008)。
+ * 应用全部迁移(0000-0009)。
  * 幂等:多次调用安全(已应用的迁移跳过)。
  */
 export async function migrateDatabase(
@@ -201,6 +221,12 @@ export async function migrateDatabase(
     await applyMigration0008(client);
   }
 
+  // 3) 应用 0009(projects.workspace_path)
+  if (!applied.has(MIGRATION_0009_HASH)) {
+    console.log("Applying migration 0009_workspace_path...");
+    await applyMigration0009(client);
+  }
+
   client.close();
 }
 
@@ -211,5 +237,5 @@ if (isMain) {
   const authToken = process.env.DATABASE_AUTH_TOKEN;
   console.log(`Migrating ${url} ...`);
   await migrateDatabase(url, authToken);
-  console.log("Migration complete (0000-0008).");
+  console.log("Migration complete (0000-0009).");
 }

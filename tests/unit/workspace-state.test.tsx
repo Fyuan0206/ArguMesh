@@ -94,7 +94,7 @@ describe("WorkspaceProvider", () => {
       projects: [{ id: "project-local", name: "本地待同步", description: "", status: "active", paperIds: [], createdAt: "2026-08-13" }],
     }));
     vi.spyOn(api, "listProjects").mockResolvedValue({
-      projects: [{ id: "project-cloud", name: "云端项目", description: "已同步", extractionProgress: 0, createdAt: "2026-08-12T00:00:00.000Z", archived: false, archivedAt: null, sortOrder: 0, paperCount: 0 }],
+      projects: [{ id: "project-cloud", name: "云端项目", description: "已同步", extractionProgress: 0, createdAt: "2026-08-12T00:00:00.000Z", archived: false, archivedAt: null, sortOrder: 0, paperCount: 0, workspacePath: null }],
     });
     vi.spyOn(api, "listPapersByProject").mockResolvedValue({ papers: [] });
 
@@ -122,7 +122,7 @@ describe("WorkspaceProvider", () => {
     window.sessionStorage.setItem("paperidea_access_token", "test-token");
     window.localStorage.setItem("paperidea_workspace_v2_test-account", JSON.stringify({ projects: [], papers: [], pendingSync: [] }));
     vi.spyOn(api, "listProjects").mockResolvedValue({
-      projects: [{ id: "project-cloud", name: "云端项目", description: "", extractionProgress: 0, createdAt: "2026-08-12T00:00:00.000Z", archived: false, archivedAt: null, sortOrder: 0, paperCount: 3 }],
+      projects: [{ id: "project-cloud", name: "云端项目", description: "", extractionProgress: 0, createdAt: "2026-08-12T00:00:00.000Z", archived: false, archivedAt: null, sortOrder: 0, paperCount: 3, workspacePath: null }],
     });
     vi.spyOn(api, "listPapersByProject").mockResolvedValue({
       papers: [{
