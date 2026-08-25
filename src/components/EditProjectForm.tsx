@@ -1,11 +1,12 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { X } from "@phosphor-icons/react";
+import { FolderOpen, X } from "@phosphor-icons/react";
+import * as api from "../api";
 import type { LocalProject } from "../state/workspace";
 
 interface EditProjectFormProps {
   project: LocalProject;
-  onSubmit: (updates: { name: string; description: string }) => void;
+  onSubmit: (updates: { name: string; description: string; workspacePath?: string | null }) => void;
   onCancel: () => void;
 }
 
@@ -21,14 +22,21 @@ interface EditProjectFormProps {
 export function EditProjectForm({ project, onSubmit, onCancel }: EditProjectFormProps) {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description);
+  const [workspacePath, setWorkspacePath] = useState(project.workspacePath ?? "");
+  const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState("");
+  const [openError, setOpenError] = useState("");
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     setName(project.name);
     setDescription(project.description);
+    setWorkspacePath(project.workspacePath ?? "");
     setError("");
-  }, [project.id, project.name, project.description]);
+    setPickError("");
+    setOpenError("");
+  }, [project.id, project.name, project.description, project.workspacePath]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -50,6 +58,28 @@ export function EditProjectForm({ project, onSubmit, onCancel }: EditProjectForm
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
+  async function handlePickFolder() {
+    setPickError("");
+    setPicking(true);
+    try {
+      const path = await api.pickDirectory();
+      if (path) setWorkspacePath(path);
+    } catch (err) {
+      setPickError(err instanceof Error ? err.message : "选择文件夹失败");
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  async function handleOpenPath() {
+    setOpenError("");
+    try {
+      await api.openLocalPath(workspacePath);
+    } catch (err) {
+      setOpenError(err instanceof Error ? err.message : "无法打开文件夹");
+    }
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
@@ -57,7 +87,7 @@ export function EditProjectForm({ project, onSubmit, onCancel }: EditProjectForm
       setError("项目名称不能为空");
       return;
     }
-    onSubmit({ name: trimmedName, description: description.trim() });
+    onSubmit({ name: trimmedName, description: description.trim(), workspacePath: workspacePath.trim() || null });
   }
 
   function onBackdrop(event: React.MouseEvent<HTMLDivElement>) {
@@ -90,6 +120,19 @@ export function EditProjectForm({ project, onSubmit, onCancel }: EditProjectForm
         <label>
           <span>研究目标</span>
           <input value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} placeholder="一句话描述要解决的问题" />
+        </label>
+        <label>
+          <span>本地文件夹(可选,仅记录路径)</span>
+          <div className="path-picker-row">
+            <input readOnly value={workspacePath} placeholder="未选择(可选)" title={workspacePath || undefined} />
+            <button type="button" className="secondary-button" disabled={picking} onClick={() => void handlePickFolder()}>
+              <FolderOpen />{picking ? "选择中…" : "选择文件夹"}
+            </button>
+            {workspacePath ? <button type="button" className="text-button subtle" onClick={() => void handleOpenPath()}>打开</button> : null}
+            {workspacePath ? <button type="button" className="text-button subtle" onClick={() => setWorkspacePath("")}>清除</button> : null}
+          </div>
+          {pickError ? <small className="crud-error">{pickError}</small> : null}
+          {openError ? <small className="crud-error">{openError}</small> : null}
         </label>
         <footer>
           <small>URL 仍以 ID 标识,改名不影响分享与刷新。</small>

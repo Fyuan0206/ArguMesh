@@ -17,6 +17,7 @@ import { reviewRoutes } from "./routes/reviews";
 import { researchQuestionRoutes } from "./routes/researchQuestions";
 import { experimentRoutes } from "./routes/experiments";
 import { evidenceLayerRoutes } from "./routes/evidenceLayers";
+import { systemRoutes } from "./routes/system";
 import { getAiProviders } from "./services/ai";
 import type { AppEnv } from "./types";
 
@@ -53,6 +54,7 @@ app.route("/api", reviewRoutes);
 app.route("/api", researchQuestionRoutes);
 app.route("/api", experimentRoutes);
 app.route("/api", evidenceLayerRoutes);
+app.route("/api", systemRoutes);
 
 app.notFound((c) => c.json({ error: "NOT_FOUND", message: "接口不存在" }, 404));
 app.onError((error, c) => {

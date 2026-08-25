@@ -19,6 +19,8 @@ import type { AppEnv } from "../types";
 const projectPatchSchema = z.object({
   name: z.string().trim().min(1).max(300).optional(),
   description: z.string().trim().max(2_000).optional(),
+  /** null = 清除关联路径;省略 = 不改。 */
+  workspacePath: z.string().trim().min(1).max(1_000).nullable().optional(),
 });
 
 const archiveToggleSchema = z.object({
@@ -85,7 +87,7 @@ projectRoutes.get("/projects/:projectId", async (c) => {
 projectRoutes.patch("/projects/:projectId", async (c) => {
   const parsed = projectPatchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_PROJECT", message: "项目字段不合法", issues: parsed.error.issues }, 400);
-  if (parsed.data.name === undefined && parsed.data.description === undefined) {
+  if (parsed.data.name === undefined && parsed.data.description === undefined && parsed.data.workspacePath === undefined) {
     return c.json({ error: "NO_FIELDS_TO_UPDATE", message: "至少提供一个待更新字段" }, 400);
   }
   const db = createDatabase(c.env);

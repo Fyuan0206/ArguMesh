@@ -1,11 +1,18 @@
-import { FolderSimple, MagnifyingGlass, PencilSimple, Plus, Trash, X } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { FolderOpen, FolderSimple, MagnifyingGlass, PencilSimple, Plus, Trash, X } from "@phosphor-icons/react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import * as api from "../api";
 import { EditProjectForm } from "../components/EditProjectForm";
 import { PageHeader } from "../components/PageHeader";
 import { SyncBanner } from "../components/SyncBanner";
 import { EmptyState } from "../components/states";
 import { useWorkspace, type LocalProject } from "../state/workspace";
+
+function folderNameFromPath(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  const parts = trimmed.split(/[\\/]/);
+  return parts[parts.length - 1] || trimmed;
+}
 
 export function ProjectsPage() {
   const { projects, papers, ideas, addProject, updateProject, deleteProject } = useWorkspace();
@@ -14,16 +21,54 @@ export function ProjectsPage() {
   const [editingId, setEditingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState("");
+  const [nameDraft, setNameDraft] = useState("");
   const filtered = useMemo(() => projects.filter((project) => `${project.name} ${project.description}`.toLowerCase().includes(query.toLowerCase())), [projects, query]);
+
+  function resetCreateForm() {
+    setCreating(false);
+    setWorkspacePath("");
+    setPickError("");
+    setNameDraft("");
+  }
+
+  async function handlePickFolder() {
+    setPickError("");
+    setPicking(true);
+    try {
+      const path = await api.pickDirectory();
+      if (!path) return;
+      setWorkspacePath(path);
+      setNameDraft((current) => current.trim() ? current : folderNameFromPath(path));
+    } catch (error) {
+      setPickError(error instanceof Error ? error.message : "选择文件夹失败");
+    } finally {
+      setPicking(false);
+    }
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
     if (!name) return;
-    addProject({ name, description: String(form.get("description") ?? "").trim() });
+    addProject({
+      name,
+      description: String(form.get("description") ?? "").trim(),
+      workspacePath: workspacePath || null,
+    });
     event.currentTarget.reset();
-    setCreating(false);
+    resetCreateForm();
+  }
+
+  async function handleOpenPath(path: string) {
+    try {
+      await api.openLocalPath(path);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "无法打开文件夹");
+    }
   }
 
   async function handleDelete(project: LocalProject) {
@@ -49,7 +94,35 @@ export function ProjectsPage() {
       <div className="toolbar-row">
         <label className="search wide"><MagnifyingGlass /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目" /></label>
       </div>
-      {creating ? <form className="inline-form" onSubmit={submit}><div><strong>创建研究项目</strong></div><label><span>项目名称</span><input name="name" required autoFocus placeholder="例如：多模态医学影像推理" /></label><label className="grow"><span>研究目标</span><input name="description" placeholder="一句话描述要解决的问题" /></label><button className="primary" type="submit">创建</button><button className="icon-button" type="button" onClick={() => setCreating(false)} aria-label="取消"><X /></button></form> : null}
+      {creating ? (
+        <form className="inline-form multi" onSubmit={submit}>
+          <div>
+            <strong>创建研究项目</strong>
+            <span>可选关联本地文件夹(路径仅记录,不扫描导入)</span>
+          </div>
+          <label>
+            <span>项目名称</span>
+            <input name="name" required autoFocus placeholder="例如：多模态医学影像推理" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} />
+          </label>
+          <label className="grow">
+            <span>研究目标</span>
+            <input name="description" placeholder="一句话描述要解决的问题" />
+          </label>
+          <label className="grow">
+            <span>本地文件夹</span>
+            <div className="path-picker-row">
+              <input readOnly value={workspacePath} placeholder="未选择(可选)" title={workspacePath || undefined} />
+              <button type="button" className="secondary-button" disabled={picking} onClick={() => void handlePickFolder()}>
+                <FolderOpen />{picking ? "选择中…" : "选择文件夹"}
+              </button>
+              {workspacePath ? <button type="button" className="text-button subtle" onClick={() => setWorkspacePath("")}>清除</button> : null}
+            </div>
+            {pickError ? <small className="crud-error">{pickError}</small> : null}
+          </label>
+          <button className="primary" type="submit">创建</button>
+          <button className="icon-button" type="button" onClick={resetCreateForm} aria-label="取消"><X /></button>
+        </form>
+      ) : null}
       {editingId ? (() => {
         const editing = projects.find((project) => project.id === editingId);
         return editing ? <EditProjectForm project={editing} onCancel={() => setEditingId("")} onSubmit={(updates) => { updateProject(editing.id, updates); setEditingId(""); }} /> : null;
@@ -62,9 +135,18 @@ export function ProjectsPage() {
             {/* 整卡可点击进入项目,不再设独立的「进入项目」按钮;编辑/删除仍是明确的小按钮。 */}
             <Link className="project-card-entry" to={`/projects/${encodeURIComponent(project.id)}`}>
               <div className="card-icon"><FolderSimple weight="duotone" /></div>
-              <div className="project-card-main"><div className="section-heading"><div><h2>{project.name}</h2></div></div><p>{project.description || "尚未填写研究目标。"}</p><dl className="mini-stats"><div><dt>文献</dt><dd>{paperCount}</dd></div><div><dt>Ideas</dt><dd>{ideaCount}</dd></div><div><dt>创建</dt><dd>{project.createdAt.slice(5)}</dd></div></dl></div>
+              <div className="project-card-main">
+                <div className="section-heading"><div><h2>{project.name}</h2></div></div>
+                <p>{project.description || "尚未填写研究目标。"}</p>
+                {project.workspacePath ? <p className="project-workspace-path" title={project.workspacePath}>{project.workspacePath}</p> : null}
+                <dl className="mini-stats"><div><dt>文献</dt><dd>{paperCount}</dd></div><div><dt>Ideas</dt><dd>{ideaCount}</dd></div><div><dt>创建</dt><dd>{project.createdAt.slice(5)}</dd></div></dl>
+              </div>
             </Link>
-            <div className="card-actions vertical"><button className="text-button subtle" type="button" onClick={() => setEditingId(project.id)}><PencilSimple /> 编辑</button><button className="text-button danger" type="button" disabled={deleting && deletingId === project.id} onClick={() => handleDelete(project)}><Trash />{deleting && deletingId === project.id ? "删除中…" : "删除项目"}</button></div>
+            <div className="card-actions vertical">
+              {project.workspacePath ? <button className="text-button subtle" type="button" onClick={() => void handleOpenPath(project.workspacePath!)}><FolderOpen /> 打开文件夹</button> : null}
+              <button className="text-button subtle" type="button" onClick={() => setEditingId(project.id)}><PencilSimple /> 编辑</button>
+              <button className="text-button danger" type="button" disabled={deleting && deletingId === project.id} onClick={() => handleDelete(project)}><Trash />{deleting && deletingId === project.id ? "删除中…" : "删除项目"}</button>
+            </div>
           </article>;
         })}
       </section>

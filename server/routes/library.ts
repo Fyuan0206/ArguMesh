@@ -22,7 +22,12 @@ const importSchema = z.object({ value: z.string().trim().min(3).max(2_000) });
 
 export const libraryRoutes = new Hono<AppEnv>();
 
-const projectSchema = z.object({ name: z.string().trim().min(1).max(300), description: z.string().trim().max(2_000).default(""), workspacePath: z.string().max(1_000).nullable().optional() });
+const projectSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  description: z.string().trim().max(2_000).default(""),
+  /** 空串按 null 处理,避免把 "" 写入 DB。 */
+  workspacePath: z.union([z.string().trim().min(1).max(1_000), z.null()]).optional(),
+});
 
 libraryRoutes.put("/projects/:projectId", async (c) => {
   const parsed = projectSchema.safeParse(await c.req.json().catch(() => null));

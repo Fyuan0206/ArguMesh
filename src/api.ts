@@ -301,9 +301,35 @@ export async function getProject(projectId: string): Promise<{ project: RemotePr
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}`, { headers: authenticatedHeaders() }));
 }
 
-export async function patchProject(projectId: string, patch: { name?: string; description?: string }): Promise<{ project: RemoteProject }> {
+export async function patchProject(projectId: string, patch: { name?: string; description?: string; workspacePath?: string | null }): Promise<{ project: RemoteProject }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
+  }));
+}
+
+/** 打开系统原生文件夹选择器(后端 spawn 子进程)。取消时返回 null。 */
+export async function pickDirectory(): Promise<string | null> {
+  const response = await fetch("/api/system/pick-directory", {
+    method: "POST",
+    headers: authenticatedHeaders({ "content-type": "application/json" }),
+    body: "{}",
+  });
+  if (response.status === 401) throw new Error("Unauthorized");
+  const payload = (await response.json()) as { path?: string; cancelled?: boolean; message?: string };
+  if (response.status === 409 || response.status >= 500) {
+    throw new Error(payload.message ?? `选择文件夹失败 (${response.status})`);
+  }
+  if (!response.ok) throw new Error(payload.message ?? `选择文件夹失败 (${response.status})`);
+  if (payload.cancelled || !payload.path) return null;
+  return payload.path;
+}
+
+/** 在系统文件管理器中打开已关联的本地路径。 */
+export async function openLocalPath(path: string): Promise<void> {
+  await parseResponse<{ opened: true }>(await fetch("/api/system/open-path", {
+    method: "POST",
+    headers: authenticatedHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({ path }),
   }));
 }
 

@@ -222,7 +222,7 @@ export type NewPaperInput = Pick<LocalPaper, "title" | "authors" | "venue" | "ye
 
 interface WorkspaceContextValue extends WorkspaceData {
   addProject: (input: Pick<LocalProject, "name" | "description" | "workspacePath">) => string;
-  updateProject: (projectId: string, updates: Partial<Pick<LocalProject, "name" | "description">>) => void;
+  updateProject: (projectId: string, updates: Partial<Pick<LocalProject, "name" | "description" | "workspacePath">>) => void;
   /**
    * 删除项目并清理所有依赖本地状态:从每个 paper 的 projectIds 中移除该项目,
    * 移除与该项目绑定的 matrices、ideas、reader 关联,以及 knowledge / tasks / trash。
@@ -470,7 +470,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const project = data.projects.find((item) => item.id === projectId);
       if (project) {
         runSync(`更新项目「${project.name}」`, async () => {
-          await api.patchProject(projectId, { name: updates.name ?? project.name, description: updates.description ?? project.description });
+          await api.patchProject(projectId, {
+            name: updates.name ?? project.name,
+            description: updates.description ?? project.description,
+            ...(updates.workspacePath !== undefined ? { workspacePath: updates.workspacePath } : {}),
+          });
         });
       }
     },

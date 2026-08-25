@@ -27,7 +27,8 @@ await client.executeMultiple(`
     extraction_progress integer DEFAULT 0 NOT NULL,
     created_at text NOT NULL,
     archived_at text,
-    sort_order integer DEFAULT 0 NOT NULL
+    sort_order integer DEFAULT 0 NOT NULL,
+    workspace_path text
   );
   CREATE TABLE IF NOT EXISTS papers (
     id text PRIMARY KEY NOT NULL,
