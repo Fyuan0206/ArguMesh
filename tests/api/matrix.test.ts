@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import app from "../../server/index";
-import { bearer, createTestContext, jsonHeaders, type TestContext } from "./helpers";
+import { createTestContext, jsonHeaders, type TestContext } from "./helpers";
 
 let ctx: TestContext;
 
@@ -22,14 +22,14 @@ describe("evidence matrix workflow", () => {
   it("creates a project and syncs a paper into it", async () => {
     const project = await app.request(
       `http://localhost/api/projects/${PROJECT_ID}`,
-      { method: "PUT", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ id: PROJECT_ID, name: "矩阵测试项目" }) },
+      { method: "PUT", headers: jsonHeaders(), body: JSON.stringify({ id: PROJECT_ID, name: "矩阵测试项目" }) },
       ctx.bindings,
     );
     expect(project.status).toBeLessThan(300);
 
     const paper = await app.request(
       `http://localhost/api/projects/${PROJECT_ID}/papers/${PAPER_ID}`,
-      { method: "PUT", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ id: PAPER_ID, title: "测试论文", authors: "测试作者", venue: "测试会议", year: 2024 }) },
+      { method: "PUT", headers: jsonHeaders(), body: JSON.stringify({ id: PAPER_ID, title: "测试论文", authors: "测试作者", venue: "测试会议", year: 2024 }) },
       ctx.bindings,
     );
     expect(paper.status).toBeLessThan(300);
@@ -40,7 +40,7 @@ describe("evidence matrix workflow", () => {
       `http://localhost/api/matrices/${MATRIX_ID}`,
       {
         method: "PUT",
-        headers: jsonHeaders(ctx.adminToken),
+        headers: jsonHeaders(),
         body: JSON.stringify({
           id: MATRIX_ID,
           projectId: PROJECT_ID,
@@ -57,7 +57,7 @@ describe("evidence matrix workflow", () => {
     );
     expect(created.status).toBe(201);
 
-    const fetched = await app.request(`http://localhost/api/matrices/${MATRIX_ID}`, { headers: bearer(ctx.adminToken) }, ctx.bindings);
+    const fetched = await app.request(`http://localhost/api/matrices/${MATRIX_ID}`, { }, ctx.bindings);
     expect(fetched.status).toBe(200);
     const payload = (await fetched.json()) as {
       papers: Array<{ id: string }>;
@@ -73,7 +73,7 @@ describe("evidence matrix workflow", () => {
   it("confirms and locks an evidence cell", async () => {
     const response = await app.request(
       `http://localhost/api/evidence/${EVIDENCE_ID}`,
-      { method: "PATCH", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ status: "confirmed" }) },
+      { method: "PATCH", headers: jsonHeaders(), body: JSON.stringify({ status: "confirmed" }) },
       ctx.bindings,
     );
     expect(response.status).toBe(200);
@@ -84,7 +84,7 @@ describe("evidence matrix workflow", () => {
   it("refuses to roll a locked cell back to draft", async () => {
     const response = await app.request(
       `http://localhost/api/evidence/${EVIDENCE_ID}`,
-      { method: "PATCH", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ status: "draft" }) },
+      { method: "PATCH", headers: jsonHeaders(), body: JSON.stringify({ status: "draft" }) },
       ctx.bindings,
     );
     expect(response.status).toBe(409);
@@ -95,7 +95,7 @@ describe("evidence matrix workflow", () => {
   it("allows unlocking with locked:false", async () => {
     const response = await app.request(
       `http://localhost/api/evidence/${EVIDENCE_ID}`,
-      { method: "PATCH", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ status: "draft", locked: false }) },
+      { method: "PATCH", headers: jsonHeaders(), body: JSON.stringify({ status: "draft", locked: false }) },
       ctx.bindings,
     );
     expect(response.status).toBe(200);
@@ -103,8 +103,8 @@ describe("evidence matrix workflow", () => {
     expect(payload).toMatchObject({ status: "draft", locked: false });
   });
 
-  it("hides another account's matrix with 404", async () => {
-    const response = await app.request(`http://localhost/api/matrices/${MATRIX_ID}`, { headers: bearer(ctx.researcherToken) }, ctx.bindings);
-    expect(response.status).toBe(404);
+  it("retrieves the updated matrix after evidence changes", async () => {
+    const response = await app.request(`http://localhost/api/matrices/${MATRIX_ID}`, { }, ctx.bindings);
+    expect(response.status).toBe(200);
   });
 });

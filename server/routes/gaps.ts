@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { findOwnedProject } from "../auth/ownership";
+import { projectExists } from "../db/projects";
 import { createDatabase } from "../db/client";
 import { gapEvidence, gaps, knowledgeItems, projectPapers } from "../db/schema";
 import { resolveAiForRequest } from "../services/ai";
@@ -12,7 +12,7 @@ import type { AppEnv } from "../types";
  * Gap 一等对象(迁移 0009):研究缺口,带状态机。P2 打通 Evidence → Gap → Idea 主链第一环。
  * - AI Gap Discovery 由后端直接插 draft(同 C4),provenance 由后端写入,前端不可伪造。
  * - 后端构 AI context 只读本项目知识(C9),不读 PDF 全文(C10)。
- * - 权限复用 findOwnedProject;gap_evidence 的知识对象须属本项目。
+ * - gap_evidence 的知识对象须属本项目(单用户本地版,无账号归属)。
  */
 
 const GAP_STATUSES = ["candidate", "searching", "evidenced", "converted", "rejected"] as const;
@@ -123,8 +123,7 @@ export const gapRoutes = new Hono<AppEnv>();
 /** POST /projects/:projectId/gaps — 人工创建一条缺口(candidate)。 */
 gapRoutes.post("/projects/:projectId/gaps", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_GAP", issues: parsed.error.issues }, 400);
   if (parsed.data.paperId && !(await projectPaperInProject(c.env, projectId, parsed.data.paperId))) {
@@ -134,7 +133,7 @@ gapRoutes.post("/projects/:projectId/gaps", async (c) => {
   const id = crypto.randomUUID();
   const db = createDatabase(c.env);
   await db.insert(gaps).values({
-    id, ownerId: accountId, projectId,
+    id, projectId,
     paperId: parsed.data.paperId ?? null,
     title: parsed.data.title, description: parsed.data.description,
     rationale: parsed.data.rationale, note: parsed.data.note,
@@ -152,13 +151,12 @@ gapRoutes.post("/projects/:projectId/gaps", async (c) => {
 /** GET /projects/:projectId/gaps — 列出本项目缺口(每条附挂载的证据 id 列表)。 */
 gapRoutes.get("/projects/:projectId/gaps", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const rows = await db
     .select(GAP_SELECT)
     .from(gaps)
-    .where(and(eq(gaps.projectId, projectId), eq(gaps.ownerId, accountId)))
+    .where(and(eq(gaps.projectId, projectId)))
     .orderBy(desc(gaps.createdAt));
   const gapIds = rows.map((r) => r.id);
   const evidenceByGap = new Map<string, Array<{ id: string; knowledgeItemId: string; stance: string }>>();
@@ -180,8 +178,7 @@ gapRoutes.get("/projects/:projectId/gaps", async (c) => {
 gapRoutes.patch("/projects/:projectId/gaps/:gapId", async (c) => {
   const projectId = c.req.param("projectId");
   const gapId = c.req.param("gapId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = patchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_GAP_PATCH", issues: parsed.error.issues }, 400);
   if (Object.keys(parsed.data).length === 0) return c.json({ error: "EMPTY_PATCH", message: "没有要修改的内容" }, 400);
@@ -190,7 +187,7 @@ gapRoutes.patch("/projects/:projectId/gaps/:gapId", async (c) => {
   const existing = await db
     .select(GAP_SELECT)
     .from(gaps)
-    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId), eq(gaps.ownerId, accountId)))
+    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId)))
     .get();
   if (!existing) return c.json({ error: "GAP_NOT_FOUND", message: "缺口不存在" }, 404);
 
@@ -214,11 +211,10 @@ gapRoutes.patch("/projects/:projectId/gaps/:gapId", async (c) => {
 gapRoutes.delete("/projects/:projectId/gaps/:gapId", async (c) => {
   const projectId = c.req.param("projectId");
   const gapId = c.req.param("gapId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: gaps.id }).from(gaps)
-    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId), eq(gaps.ownerId, accountId))).get();
+    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId))).get();
   if (!existing) return c.json({ error: "GAP_NOT_FOUND" }, 404);
   await db.delete(gaps).where(eq(gaps.id, gapId));
   return c.json({ id: gapId, deleted: true });
@@ -228,8 +224,7 @@ gapRoutes.delete("/projects/:projectId/gaps/:gapId", async (c) => {
 gapRoutes.post("/projects/:projectId/gaps/:gapId/evidence", async (c) => {
   const projectId = c.req.param("projectId");
   const gapId = c.req.param("gapId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = z.object({
     knowledgeItemId: z.string().min(1),
     stance: z.enum(["supports", "contradicts", "context"]).default("supports"),
@@ -238,11 +233,11 @@ gapRoutes.post("/projects/:projectId/gaps/:gapId/evidence", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_EVIDENCE", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const gap = await db.select({ id: gaps.id }).from(gaps)
-    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId), eq(gaps.ownerId, accountId))).get();
+    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId))).get();
   if (!gap) return c.json({ error: "GAP_NOT_FOUND" }, 404);
   // 证据必须是本项目+本账号的知识对象。
   const item = await db.select({ id: knowledgeItems.id }).from(knowledgeItems)
-    .where(and(eq(knowledgeItems.id, parsed.data.knowledgeItemId), eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId))).get();
+    .where(and(eq(knowledgeItems.id, parsed.data.knowledgeItemId), eq(knowledgeItems.projectId, projectId))).get();
   if (!item) return c.json({ error: "KNOWLEDGE_NOT_FOUND", message: "知识对象不在当前项目中" }, 404);
   // 幂等:已挂则更新 stance/note。
   const existing = await db.select().from(gapEvidence)
@@ -262,12 +257,11 @@ gapRoutes.delete("/projects/:projectId/gaps/:gapId/evidence/:evidenceId", async 
   const projectId = c.req.param("projectId");
   const gapId = c.req.param("gapId");
   const evidenceId = c.req.param("evidenceId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: gapEvidence.id }).from(gapEvidence)
     .innerJoin(gaps, eq(gapEvidence.gapId, gaps.id))
-    .where(and(eq(gapEvidence.id, evidenceId), eq(gapEvidence.gapId, gapId), eq(gaps.projectId, projectId), eq(gaps.ownerId, accountId))).get();
+    .where(and(eq(gapEvidence.id, evidenceId), eq(gapEvidence.gapId, gapId), eq(gaps.projectId, projectId))).get();
   if (!existing) return c.json({ error: "EVIDENCE_NOT_FOUND" }, 404);
   await db.delete(gapEvidence).where(eq(gapEvidence.id, evidenceId));
   return c.json({ id: evidenceId, deleted: true });
@@ -276,10 +270,9 @@ gapRoutes.delete("/projects/:projectId/gaps/:gapId/evidence/:evidenceId", async 
 /** POST /projects/:projectId/gaps/discover — AI 从本项目知识发现缺口,直接存 draft(candidate)。 */
 gapRoutes.post("/projects/:projectId/gaps/discover", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
 
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
 
   const db = createDatabase(c.env);
@@ -287,7 +280,7 @@ gapRoutes.post("/projects/:projectId/gaps/discover", async (c) => {
   const knowledge = await db
     .select({ id: knowledgeItems.id, kind: knowledgeItems.kind, title: knowledgeItems.title, content: knowledgeItems.content })
     .from(knowledgeItems)
-    .where(and(eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId)))
+    .where(and(eq(knowledgeItems.projectId, projectId)))
     .orderBy(desc(knowledgeItems.createdAt))
     .limit(60);
   if (knowledge.length === 0) {
@@ -313,7 +306,7 @@ gapRoutes.post("/projects/:projectId/gaps/discover", async (c) => {
         model: resolution.model, generatedAt: now, note: "", createdAt: now, updatedAt: now,
       };
       await db.insert(gaps).values({
-        id, ownerId: accountId, projectId, paperId: null, title: g.title, description: g.description,
+        id, projectId, paperId: null, title: g.title, description: g.description,
         rationale: g.rationale, status: "candidate", source: "ai", model: resolution.model,
         generatedAt: now, note: "", createdAt: now, updatedAt: now,
       });

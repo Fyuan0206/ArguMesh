@@ -1,4 +1,4 @@
-import { and, eq, or } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
@@ -29,10 +29,7 @@ libraryRoutes.put("/projects/:projectId", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_PROJECT", message: "项目信息不完整" }, 400);
   const db = createDatabase(c.env);
   const id = c.req.param("projectId");
-  const ownerId = c.get("accountId");
-  const existing = await db.select({ ownerId: projects.ownerId }).from(projects).where(eq(projects.id, id)).get();
-  if (existing && existing.ownerId !== ownerId) return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
-  await db.insert(projects).values({ id, ownerId, ...parsed.data, createdAt: new Date().toISOString() }).onConflictDoUpdate({ target: projects.id, set: parsed.data });
+  await db.insert(projects).values({ id, ...parsed.data, createdAt: new Date().toISOString() }).onConflictDoUpdate({ target: projects.id, set: parsed.data });
   return c.json({ id }, 201);
 });
 
@@ -45,19 +42,16 @@ libraryRoutes.put("/projects/:projectId/papers/:paperId", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_PAPER", message: "论文元数据不完整", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const projectId = c.req.param("projectId");
-  const ownerId = c.get("accountId");
-  if (!await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, projectId), eq(projects.ownerId, ownerId))).get()) {
+  if (!await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId)).get()) {
     return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
   }
-  const existingPaperById = await db.select({ ownerId: papers.ownerId }).from(papers).where(eq(papers.id, parsed.data.id)).get();
-  if (existingPaperById && existingPaperById.ownerId !== ownerId) return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
-  const duplicate = await db.select({ id: papers.id }).from(papers).where(and(eq(papers.ownerId, ownerId), or(
+  const duplicate = await db.select({ id: papers.id }).from(papers).where(or(
     parsed.data.doi ? eq(papers.doi, parsed.data.doi) : eq(papers.id, parsed.data.id),
     parsed.data.arxivId ? eq(papers.arxivId, parsed.data.arxivId) : eq(papers.id, parsed.data.id),
     parsed.data.fileHash ? eq(papers.fileHash, parsed.data.fileHash) : eq(papers.id, parsed.data.id),
-  ))).get();
+  )).get();
   const paperId = duplicate?.id ?? parsed.data.id;
-  const row = { ...parsed.data, id: paperId, ownerId, shortName: shortName(parsed.data.title), createdAt: new Date().toISOString() };
+  const row = { ...parsed.data, id: paperId, shortName: shortName(parsed.data.title), createdAt: new Date().toISOString() };
   await db.insert(papers).values(row).onConflictDoUpdate({ target: papers.id, set: {
     title: row.title, shortName: row.shortName, authors: row.authors, venue: row.venue, year: row.year,
     abstract: row.abstract, doi: row.doi, arxivId: row.arxivId, sourceUrl: row.sourceUrl, fileHash: row.fileHash,

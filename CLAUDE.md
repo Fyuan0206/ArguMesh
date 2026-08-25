@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **ArguMesh(论脉)** — open-source, local-first research workbench: `Literature → Evidence → Idea`. This is the self-contained OSS edition: **pure Node + local SQLite, zero cloud dependencies**. (The original prototype at `../prototype` was Cloudflare Workers + Turso; this repo intentionally removed that stack — do not reintroduce Cloudflare bindings, wrangler, or Turso-account requirements.)
 
-- Frontend: React 19 SPA (Vite 6) — projects, library, PDF reader, evidence matrix, knowledge, ideas, tasks, search, settings, admin user management.
+- Frontend: React 19 SPA (Vite 6) — projects, library, PDF reader, evidence matrix, knowledge, ideas, tasks, search, settings (single-user; no admin/auth UI).
 - Backend: Hono 4 app served by `@hono/node-server` (`server/node.ts`), SQLite via libSQL `file:` URL + Drizzle ORM.
-- Auth: DB-backed accounts (PBKDF2-SHA256 hashes) + HMAC session tokens. Default admin seeded as `admin/admin123`; admins manage accounts via `/api/users` and the `/users` page.
-- AI: optional, any OpenAI-compatible provider. **Primary: per-account config via the settings page form** (Base URL default `https://api.openai.com/v1`, API Key, model name — stored in `ai_settings`, `GET/PUT/DELETE /api/ai/config`, key never returned, only masked). Account config fully overrides the env fallback (`AI_PROVIDERS` JSON env / `STEPFUN_*`) and ignores client-sent provider/model. Unconfigured → AI endpoints return 400 `AI_NOT_CONFIGURED` pointing at the settings page; nothing else breaks.
+- Auth: **none — single-user local workbench.** No login, no accounts, no tokens; the API is open on localhost. (Migration 0008 removed the `accounts` table, `owner_id` columns, and `/api/login` + `/api/users` routes; the live DB was migrated in place.)
+- AI: optional, any OpenAI-compatible provider. **Primary: a single global config via the settings page form** (Base URL default `https://api.openai.com/v1`, API Key, model name — stored in `ai_settings` as the single `account_id='local'` row, `GET/PUT/DELETE /api/ai/config`, key never returned, only masked). Global config fully overrides the env fallback (`AI_PROVIDERS` JSON env / `STEPFUN_*`) and ignores client-sent provider/model. Unconfigured → AI endpoints return 400 `AI_NOT_CONFIGURED` pointing at the settings page; nothing else breaks.
 
 ## Commands
 
@@ -24,20 +24,22 @@ pnpm run typecheck    # tsc --noEmit
 pnpm run test         # Vitest: tests/unit (happy-dom) + tests/api (node + temp SQLite)
 pnpm run test:watch
 pnpm exec vitest run tests/api/<file>.test.ts   # single API test file
-pnpm run db:seed      # idempotent: creates all tables + admin/admin123 + demo project (fresh-install path)
-pnpm run db:migrate   # applies unapplied drizzle/ migrations (schema upgrades on existing DBs)
+pnpm run db:seed      # idempotent: creates all tables + demo project (fresh-install path; no accounts)
+pnpm run db:migrate   # applies unapplied drizzle/ migrations (0000-0007 only; 0008 已由 migrate-custom 处理)
 pnpm run db:generate  # drizzle-kit generate after editing server/db/schema.ts
 pnpm run db:backup    # JSON snapshot of all tables → backups/
 pnpm run db:studio    # drizzle-kit studio
 ```
 
-After schema changes: `db:generate` → `db:migrate`. After adding env config: update `.env.example`.
+After schema changes: `db:generate` → `db:migrate` (0000-0007), then re-run `pnpm exec tsx scripts/migrate-custom.ts` if 0008 (column drops) needs re-applying. After adding env config: update `.env.example`.
+
+Migrations run `drizzle/0000`–`0007` (0000-0006 are the core; 0007 creates the entire research arc). **0008 was removed from the journal** — the 2026-08-25 single-user port dropped the `accounts` table, `owner_id` columns, and rebuilt `ai_settings` as a global single-row table via `scripts/migrate-custom.ts` (run individually per statement; the drizzle migrator's libsql batch path triggers `SQLITE_UNKNOWN_0` on multi-statement migrations). The live DB was migrated in place.
 
 ## Runtime / Env
 
 - `server/env.ts` builds `AppBindings` from `process.env` (`loadBindings()`); `server/node.ts` and scripts use it. Tests construct bindings directly.
 - `DATABASE_URL` defaults to `file:./data/argumesh.db` (relative to repo root); remote `libsql://` URLs also work with `DATABASE_AUTH_TOKEN`.
-- `APP_ACCESS_TOKEN` (session HMAC secret) auto-generates into `data/session-secret.key` on first run if unset — restart-safe, gitignored. Explicitly setting it in `.env` is recommended for any non-local deployment.
+- No auth tokens — single-user local workbench, the API is open on localhost. Do NOT expose the API port to untrusted networks.
 - `.env` is optional (dotenv). `.env.example` documents AI config; never ship real keys.
 - `data/`, `backups/`, `dist/`, `node_modules/` are gitignored.
 
@@ -46,20 +48,17 @@ After schema changes: `db:generate` → `db:migrate`. After adding env config: u
 ### Backend (`server/`)
 
 - `node.ts` — Node entry: mounts `app` for `/api/*`, serves `dist/` static + SPA fallback for everything else.
-- `index.ts` — Hono app: `/api/health` + `/api/login` are the only public routes; a global gate verifies the bearer session token, then sets `c.var.accountId` **and** `c.var.accountRole` (role read fresh from DB every request — token role claims are ignored). `onError` re-emits `HTTPException` as JSON.
-- `auth/session.ts` — `verifyAccount(env, name, password)` (DB lookup + PBKDF2), `createSessionToken` / `verifySessionToken(token, secret, env)`. Session verification checks the account still exists in the DB, so deleting a user invalidates their tokens immediately.
-- `auth/password.ts` — PBKDF2-SHA256 (Web Crypto, 100k iterations), format `pbkdf2$<iterations>$<saltHex>$<hashHex>`, constant-time compare.
-- `auth/ownership.ts` — account-scoped lookups (same resource ID returns 404 to other accounts).
-- `db/client.ts` — `createDatabase(env)`; libSQL clients are **cached by connection URL** (file mode: one handle per URL). `db/schema.ts` is the canonical table list (11 tables incl. `accounts` and `ai_settings`).
-- `routes/` — auth, users (admin-only CRUD; self-delete blocked; last-admin protected; deleting a user cascades their projects/papers), ai (per-account AI config: GET/PUT/DELETE `/api/ai/config`, masked key only), matrix (+ evidence PATCH with locked-cell guard), files (PDFs as BLOBs in `paper_files`, ≤25 MB, `Content-Length` required), extraction, card, reader (in-memory per-process rate limiter), library, papers, projects.
-- `services/ai.ts` + `stepfun.ts` — multi-provider OpenAI-compatible chat client; unusable/placeholder providers are filtered out before reaching the frontend. `services/stepfun.ts` is provider-agnostic despite the name (kept from the prototype).
+- `index.ts` — Hono app: only `/api/health` is public; **no auth gate** (single-user local workbench — API open on localhost). 16 route modules mount on `/api`; `onError` re-emits `HTTPException` as JSON.
+- (auth/ removed in the 2026-08-25 single-user port — migration 0008 dropped `accounts`, `owner_id`, `/api/login`, `/api/users`; no session/password/ownership code.)
+- `db/client.ts` — `createDatabase(env)`; libSQL clients are **cached by connection URL** (file mode: one handle per URL). `db/schema.ts` is the canonical table list (**23 tables** — 10 core incl. `ai_settings` (global, no accounts), plus 13 research-arc tables below).
+- `routes/` — **16 route files** (auth + users removed in migration 0008). ai (global config `GET/PUT/DELETE /api/ai/config`, masked key only, single `local` row), matrix (+ evidence PATCH with locked-cell guard), files (PDFs as BLOBs in `paper_files`, ≤25 MB, `Content-Length` required), extraction, card, reader (in-memory per-process rate limiter), library, papers, projects, **plus the research arc: knowledge, researchQuestions (+ `rq_papers`), gaps (+ `gap_evidence`), ideas (+ `idea_versions`/`idea_evidence`), reviews, experiments (+ `experiment_results`), evidenceLayers** — read the directory for the current set.
 
 ### Frontend (`src/`)
 
-- `App.tsx` — router shells; `AccessGate` gates the whole app until login. **登录后落地 `/projects`(项目列表)**;文献/矩阵等内容只在项目内访问:`/projects/:projectId`(项目首页 ProjectHomePage)、`/projects/:projectId/library[/:paperId[/read]]`、`/projects/:projectId/matrices[/:matrixId]`。旧路由 `/library`、`/matrices`、`/knowledge/matrices/:matrixId` 保留兼容(全局矩阵列表 / 矩阵详情)。`/users` 是 admin-only(其他人重定向 `/projects`)。`Sidebar` 按上下文切换:项目外只有「项目」,项目内显示 概览/文献/矩阵/Ideas(`/ideas?project=:id` 过滤)+「所有项目」;底部全局入口(搜索/知识库/任务中心/用户管理/设置)始终可见。Ideas 页不在 `/projects/` 前缀下,项目上下文由 `?project=` 查询参数恢复。
-- `state/auth.tsx` — session (token + accountId + displayName + role) in sessionStorage; `AccountRole = "admin" | "researcher"`. `state/workspace.tsx` owns browser-local notes/claims/evidence/ideas + background sync queue (stale `retry` closures are dropped by JSON persistence — clear, don't retry). `state/project.tsx` — current project.
+- `App.tsx` — router shells (no login gate — single-user). Lands on `/projects`; literature/matrix/etc. are accessed inside a project: `/projects/:projectId` (ProjectHomePage), `/projects/:projectId/library[/:paperId[/read]]`, `/projects/:projectId/matrices[/:matrixId]`. Legacy routes `/library`, `/matrices`, `/knowledge/matrices/:matrixId` kept for compat. `Sidebar` switches by context. Ideas page is not under `/projects/`; project context comes from `?project=` query param.
+- `state/workspace.tsx` — browser-local notes/claims/evidence/ideas + background sync queue (stale `retry` closures are dropped by JSON persistence — clear, don't retry). `state/project.tsx` — current project. (No `state/auth.tsx` — auth removed in the single-user port.)
 - `api.ts` — fetch helpers; throws `Error("Unauthorized")` on 401 so callers clear the token. Users API helpers at the bottom.
-- `storage/paperFiles.ts` — IndexedDB PDF/OCR cache (account-scoped); Reader falls back to `GET /api/papers/:id/file`.
+- `storage/paperFiles.ts` — IndexedDB PDF/OCR cache (single-user (no scoping)); Reader falls back to `GET /api/papers/:id/file`.
 - `styles.css` — all styling; tokens in `:root` (`--nav` graphite, `--accent` cyan, `--draft` amber, `--success` green). CSS viewport target 1440×1024.
 
 ## Product Rules (apply to every feature)
@@ -82,7 +81,7 @@ After schema changes: `db:generate` → `db:migrate`. After adding env config: u
 ## Tests
 
 - `tests/unit/**` — happy-dom; `src/api.ts` and auth flow. No real IndexedDB (account-key isolation tested explicitly).
-- `tests/api/**` — `// @vitest-environment node` docblock per file; `tests/api/helpers.ts` gives each file a temp SQLite DB (migrated + seeded with `admin/admin123` and `researcher/researcher123`) and `app.request(url, init, bindings)`. Temp dirs are cleaned best-effort (Windows file handles may persist — harmless).
+- `tests/api/**` — `// @vitest-environment node` docblock per file; `tests/api/helpers.ts` gives each file a temp SQLite DB (fresh, migrated via `scripts/migrate-custom.ts` — no account seed) and `app.request(url, init, bindings)`. Temp dirs are cleaned best-effort (Windows file handles may persist — harmless).
 - `tests/fixtures/` — small sample PDF used by the files test.
 - Before finishing work: `pnpm run typecheck`, `pnpm run test`, `pnpm run build`. Report changed files, migration impact, test results, and known gaps.
 

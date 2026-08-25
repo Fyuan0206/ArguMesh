@@ -17,6 +17,9 @@ export interface AiProviderConfig {
   models: string[];
 }
 
+/** 全局 AI 配置行的固定主键(单用户本地版,无账号概念)。 */
+export const LOCAL_AI_ACCOUNT_ID = "local";
+
 export function parseProviders(raw: string | undefined, fallback: AiProviderConfig): AiProviderConfig[] {
   if (raw) {
     try {
@@ -68,11 +71,13 @@ export function findProvider(env: AppBindings, providerId: string | undefined): 
   return providers.find(isUsable) ?? null;
 }
 
-/** 账户在设置页保存的自定义 AI 配置(ai_settings 表),存在则完全优先于环境变量厂商配置。
- *  客户端传来的 provider/model 在账户配置存在时被忽略(单一自定义配置,无第二个选择)。 */
-export async function getAccountAiProvider(env: AppBindings, accountId: string, requestedProviderId?: string): Promise<AiProviderConfig | null> {
+/**
+ * 全局 AI 配置(单用户本地版):设置页保存的自定义配置(ai_settings 表,固定 account_id="local"),
+ * 存在则完全优先于环境变量厂商配置。客户端传来的 provider/model 在自定义配置存在时被忽略。
+ */
+export async function getAccountAiProvider(env: AppBindings, requestedProviderId?: string): Promise<AiProviderConfig | null> {
   const db = createDatabase(env);
-  const row = await db.select().from(aiSettings).where(eq(aiSettings.accountId, accountId)).get();
+  const row = await db.select().from(aiSettings).where(eq(aiSettings.accountId, LOCAL_AI_ACCOUNT_ID)).get();
   if (row && row.baseUrl.trim() && row.apiKey.trim()) {
     return {
       id: "account",
@@ -87,15 +92,14 @@ export async function getAccountAiProvider(env: AppBindings, accountId: string, 
 
 /**
  * AI 端点统一解析入口:返回本次请求实际使用的 provider + 模型,或明确的配置错误。
- * 账户配置(设置页)优先;客户端传的 provider/model 只在环境变量厂商模式下生效,
+ * 全局配置(设置页)优先;客户端传的 provider/model 只在环境变量厂商模式下生效,
  * 且必须是该厂商已声明的模型之一,否则回落到第一个可用模型。
  */
 export async function resolveAiForRequest(
   env: AppBindings,
-  accountId: string,
   requested: { provider?: string; model?: string },
 ): Promise<{ provider: AiProviderConfig; model: string } | { error: { code: string; message: string } }> {
-  const provider = await getAccountAiProvider(env, accountId, requested.provider);
+  const provider = await getAccountAiProvider(env, requested.provider);
   if (!provider) {
     return { error: { code: "AI_NOT_CONFIGURED", message: "未配置 AI:请在设置页填写 Base URL、API Key 与模型名称" } };
   }

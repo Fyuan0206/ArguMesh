@@ -9,7 +9,7 @@ import { WorkspaceProvider, useWorkspace, type PendingSyncEntry } from "../../sr
  * 且从 localStorage 恢复的条目(JSON 丢弃 retry 闭包)重试时必须被清除而不是永久卡住。
  */
 
-const STORAGE_KEY = "paperidea_workspace_v2_test-account";
+const STORAGE_KEY = "paperidea_workspace_v2_local";
 
 function seedWorkspace(pendingSync: Array<Omit<PendingSyncEntry, "retry">> = []) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify({

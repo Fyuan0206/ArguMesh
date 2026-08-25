@@ -31,9 +31,7 @@ fileRoutes.put("/papers/:paperId/file", async (c) => {
   }
 
   const db = createDatabase(c.env);
-  const ownerId = c.get("accountId");
-  const ownerCondition = and(eq(papers.id, paperId), eq(papers.ownerId, ownerId));
-  const paper = await db.select().from(papers).where(ownerCondition).get();
+  const paper = await db.select().from(papers).where(eq(papers.id, paperId)).get();
   if (!paper) {
     return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
   }
@@ -45,7 +43,6 @@ fileRoutes.put("/papers/:paperId/file", async (c) => {
     .insert(paperFiles)
     .values({
       paperId,
-      ownerId,
       data,
       mimeType: "application/pdf",
       fileSize: data.byteLength,
@@ -60,7 +57,7 @@ fileRoutes.put("/papers/:paperId/file", async (c) => {
   await db
     .update(papers)
     .set({ mimeType: "application/pdf", fileSize: data.byteLength })
-    .where(ownerCondition);
+    .where(eq(papers.id, paperId));
 
   return c.json({ paperId, size: data.byteLength, cloudStored: true }, 201);
 });
@@ -68,7 +65,7 @@ fileRoutes.put("/papers/:paperId/file", async (c) => {
 fileRoutes.get("/papers/:paperId/file", async (c) => {
   const db = createDatabase(c.env);
   const paperId = c.req.param("paperId");
-  const paper = await db.select().from(papers).where(and(eq(papers.id, paperId), eq(papers.ownerId, c.get("accountId")))).get();
+  const paper = await db.select().from(papers).where(eq(papers.id, paperId)).get();
 
   if (!paper) {
     return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);

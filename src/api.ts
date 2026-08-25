@@ -44,16 +44,18 @@ export interface MatrixResponse {
   cells: Record<string, EvidenceCell>;
 }
 
-const ACCESS_TOKEN_KEY = "paperidea_access_token";
-
-export function getStoredAccessToken() {
-  return window.sessionStorage.getItem(ACCESS_TOKEN_KEY) ?? "";
-}
-
 export interface AiProviderInfo {
   id: string;
   label: string;
   models: string[];
+}
+
+/**
+ * 请求头助手(单用户本地版:无鉴权,不附加 Bearer token)。
+ * 保留此函数名以减少对调用点的改动;仅组装传入的额外头(content-type 等)。
+ */
+export function authenticatedHeaders(extra?: HeadersInit) {
+  return new Headers(extra);
 }
 
 /** 从后端取当前 AI 模型名 + 可用厂商列表(健康检查无需鉴权)。失败时回退空。 */
@@ -92,28 +94,6 @@ export async function saveAiConfig(input: { baseUrl: string; apiKey: string; mod
 
 export async function deleteAiConfig(): Promise<{ cleared: true }> {
   return parseResponse(await fetch("/api/ai/config", { method: "DELETE", headers: authenticatedHeaders() }));
-}
-
-export function storeAccessToken(token: string) {
-  if (token) window.sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
-  else window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-}
-
-function authenticatedHeaders(extra?: HeadersInit) {
-  const headers = new Headers(extra);
-  const token = getStoredAccessToken();
-  // Headers.set / XHR.setRequestHeader 拒绝 ISO-8859-1 之外的字符;
-  // 旧版本曾把中文姓名嵌进 token,导致创建项目等调用直接抛 TypeError。
-  // 这里做兜底:任何含中文 / emoji 的坏 token 一律丢弃,前端走 401 流程。
-  if (token && isIso88591Safe(token)) headers.set("authorization", `Bearer ${token}`);
-  return headers;
-}
-
-export function isIso88591Safe(value: string): boolean {
-  for (let i = 0; i < value.length; i += 1) {
-    if (value.charCodeAt(i) > 0xff) return false;
-  }
-  return true;
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -171,8 +151,6 @@ export async function uploadPaperFile(paperId: string, file: Blob, onProgress?: 
   return new Promise<{ paperId: string; size: number; cloudStored: boolean }>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", `/api/papers/${encodeURIComponent(paperId)}/file`);
-    const token = getStoredAccessToken();
-    if (token && isIso88591Safe(token)) request.setRequestHeader("authorization", `Bearer ${token}`);
     request.setRequestHeader("content-type", "application/pdf");
     request.upload.onprogress = (event) => onProgress?.(event.lengthComputable ? event.loaded / event.total : 0);
     request.onerror = () => reject(new Error("PDF 云端上传失败"));
@@ -389,44 +367,6 @@ export async function removePaperFromProject(paperId: string, projectId: string)
     method: "DELETE", headers: authenticatedHeaders(),
   }));
 }
-
-// ----------------------------------------------------------------------------
-// 用户管理(仅 admin)
-// ----------------------------------------------------------------------------
-
-export interface RemoteUser {
-  id: string;
-  name: string;
-  role: "admin" | "researcher";
-  createdAt: string;
-}
-
-export async function listUsers(): Promise<{ users: RemoteUser[] }> {
-  return parseResponse(await fetch("/api/users", { headers: authenticatedHeaders() }));
-}
-
-export async function createUser(input: { name: string; password: string; role?: "admin" | "researcher" }): Promise<{ user: RemoteUser }> {
-  return parseResponse(await fetch("/api/users", {
-    method: "POST",
-    headers: authenticatedHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify(input),
-  }));
-}
-
-export async function patchUser(userId: string, patch: { password?: string; role?: "admin" | "researcher" }): Promise<{ user: RemoteUser }> {
-  return parseResponse(await fetch(`/api/users/${encodeURIComponent(userId)}`, {
-    method: "PATCH",
-    headers: authenticatedHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify(patch),
-  }));
-}
-
-export async function deleteUser(userId: string): Promise<{ userId: string; deleted: true }> {
-  return parseResponse(await fetch(`/api/users/${encodeURIComponent(userId)}`, {
-    method: "DELETE", headers: authenticatedHeaders(),
-  }));
-}
-
 
 // ═══ Research Arc (研究弧,v2.0):Knowledge → Gap → Idea → Review → Experiment,以 RQ 为脊柱 ═══
 

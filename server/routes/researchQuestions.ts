@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { findOwnedProject } from "../auth/ownership";
+import { projectExists } from "../db/projects";
 import { createDatabase } from "../db/client";
 import { papers, projectPapers, researchQuestions, rqPapers } from "../db/schema";
 import type { AppEnv } from "../types";
@@ -11,7 +11,7 @@ import type { AppEnv } from "../types";
  * - 状态机:open → investigating → evidenced → concluded,或任一阶段 → abandoned。
  *   converted(终态概念)这里不用;abandoned 为终态。流转由 PATCH status 校验。
  * - provenance:source(human/ai)、model、generatedAt。
- * - 权限复用 findOwnedProject;rq_papers 关联的论文须属本项目+本账号。
+ * - rq_papers 关联的论文须属本项目(单用户本地版,无账号归属)。
  * - 列表/单条都 enrich 出关联的 paperId 列表(附带基本元信息),便于前端渲染。
  */
 
@@ -128,8 +128,7 @@ export const researchQuestionRoutes = new Hono<AppEnv>();
 /** POST /projects/:projectId/research-questions — 人工创建一个研究问题(open)。 */
 researchQuestionRoutes.post("/projects/:projectId/research-questions", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_RQ", issues: parsed.error.issues }, 400);
 
@@ -141,7 +140,7 @@ researchQuestionRoutes.post("/projects/:projectId/research-questions", async (c)
   const id = crypto.randomUUID();
   const db = createDatabase(c.env);
   await db.insert(researchQuestions).values({
-    id, ownerId: accountId, projectId,
+    id, projectId,
     question: parsed.data.question, goal: parsed.data.goal,
     status: "open", source: "human", model: null, generatedAt: null,
     createdAt: now, updatedAt: now,
@@ -156,13 +155,12 @@ researchQuestionRoutes.post("/projects/:projectId/research-questions", async (c)
 /** GET /projects/:projectId/research-questions — 列出本项目全部研究问题(每条附关联论文)。 */
 researchQuestionRoutes.get("/projects/:projectId/research-questions", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const rows = await db
     .select(RQ_SELECT)
     .from(researchQuestions)
-    .where(and(eq(researchQuestions.projectId, projectId), eq(researchQuestions.ownerId, accountId)))
+    .where(and(eq(researchQuestions.projectId, projectId)))
     .orderBy(desc(researchQuestions.createdAt));
   const ids = rows.map((r) => r.id);
   const linkedByRq = new Map<string, LinkedPaper[]>();
@@ -185,11 +183,10 @@ researchQuestionRoutes.get("/projects/:projectId/research-questions", async (c) 
 researchQuestionRoutes.get("/projects/:projectId/research-questions/:rqId", async (c) => {
   const projectId = c.req.param("projectId");
   const rqId = c.req.param("rqId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const row = await db.select(RQ_SELECT).from(researchQuestions)
-    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId), eq(researchQuestions.ownerId, accountId))).get();
+    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId))).get();
   if (!row) return c.json({ error: "RQ_NOT_FOUND", message: "研究问题不存在" }, 404);
   const linked = await loadLinkedPapers(c.env, projectId, rqId);
   return c.json({ researchQuestion: toRq(row, linked) });
@@ -199,15 +196,14 @@ researchQuestionRoutes.get("/projects/:projectId/research-questions/:rqId", asyn
 researchQuestionRoutes.patch("/projects/:projectId/research-questions/:rqId", async (c) => {
   const projectId = c.req.param("projectId");
   const rqId = c.req.param("rqId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = patchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_RQ_PATCH", issues: parsed.error.issues }, 400);
   if (Object.keys(parsed.data).length === 0) return c.json({ error: "EMPTY_PATCH", message: "没有要修改的内容" }, 400);
 
   const db = createDatabase(c.env);
   const existing = await db.select(RQ_SELECT).from(researchQuestions)
-    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId), eq(researchQuestions.ownerId, accountId))).get();
+    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId))).get();
   if (!existing) return c.json({ error: "RQ_NOT_FOUND", message: "研究问题不存在" }, 404);
 
   if (parsed.data.status && parsed.data.status !== existing.status && !canTransition(existing.status, parsed.data.status)) {
@@ -225,11 +221,10 @@ researchQuestionRoutes.patch("/projects/:projectId/research-questions/:rqId", as
 researchQuestionRoutes.delete("/projects/:projectId/research-questions/:rqId", async (c) => {
   const projectId = c.req.param("projectId");
   const rqId = c.req.param("rqId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: researchQuestions.id }).from(researchQuestions)
-    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId), eq(researchQuestions.ownerId, accountId))).get();
+    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId))).get();
   if (!existing) return c.json({ error: "RQ_NOT_FOUND", message: "研究问题不存在" }, 404);
   await db.delete(researchQuestions).where(eq(researchQuestions.id, rqId));
   return c.json({ id: rqId, deleted: true });
@@ -239,13 +234,12 @@ researchQuestionRoutes.delete("/projects/:projectId/research-questions/:rqId", a
 researchQuestionRoutes.post("/projects/:projectId/research-questions/:rqId/papers", async (c) => {
   const projectId = c.req.param("projectId");
   const rqId = c.req.param("rqId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = z.object({ paperId: z.string().min(1).max(160), role: z.string().max(100).default("related") }).safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_LINK", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const rq = await db.select({ id: researchQuestions.id }).from(researchQuestions)
-    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId), eq(researchQuestions.ownerId, accountId))).get();
+    .where(and(eq(researchQuestions.id, rqId), eq(researchQuestions.projectId, projectId))).get();
   if (!rq) return c.json({ error: "RQ_NOT_FOUND", message: "研究问题不存在" }, 404);
   const missing = await findPapersNotInProject(c.env, projectId, [parsed.data.paperId]);
   if (missing.length > 0) return c.json({ error: "PAPER_NOT_IN_PROJECT", message: "论文不在当前项目中" }, 404);
@@ -264,12 +258,11 @@ researchQuestionRoutes.delete("/projects/:projectId/research-questions/:rqId/pap
   const projectId = c.req.param("projectId");
   const rqId = c.req.param("rqId");
   const paperId = c.req.param("paperId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ rqId: rqPapers.rqId }).from(rqPapers)
     .innerJoin(researchQuestions, eq(rqPapers.rqId, researchQuestions.id))
-    .where(and(eq(rqPapers.rqId, rqId), eq(rqPapers.paperId, paperId), eq(researchQuestions.projectId, projectId), eq(researchQuestions.ownerId, accountId))).get();
+    .where(and(eq(rqPapers.rqId, rqId), eq(rqPapers.paperId, paperId), eq(researchQuestions.projectId, projectId))).get();
   if (!existing) return c.json({ error: "LINK_NOT_FOUND", message: "关联不存在" }, 404);
   await db.delete(rqPapers).where(and(eq(rqPapers.rqId, rqId), eq(rqPapers.paperId, paperId)));
   return c.json({ rqId, paperId, deleted: true });

@@ -4,7 +4,6 @@ import { z } from "zod";
 import { createDatabase } from "../db/client";
 import { dimensions, evidenceCells, matrices, matrixPapers, papers, projectPapers, projects } from "../db/schema";
 import type { AppEnv } from "../types";
-import { findOwnedEvidence, findOwnedMatrix } from "../auth/ownership";
 
 const evidenceStatusSchema = z.object({
   status: z.enum(["draft", "confirmed", "conflict", "missing"]),
@@ -28,7 +27,7 @@ matrixRoutes.put("/matrices/:matrixId", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_MATRIX", message: "矩阵信息不完整", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const input = parsed.data;
-  if (!await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, input.projectId), eq(projects.ownerId, c.get("accountId")))).get()) {
+  if (!await db.select({ id: projects.id }).from(projects).where(eq(projects.id, input.projectId)).get()) {
     return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
   }
   const existingMatrix = await db.select({ projectId: matrices.projectId }).from(matrices).where(eq(matrices.id, input.id)).get();
@@ -61,17 +60,14 @@ matrixRoutes.put("/matrices/:matrixId", async (c) => {
 matrixRoutes.get("/matrices/:matrixId", async (c) => {
   const db = createDatabase(c.env);
   const matrixId = c.req.param("matrixId");
-  const owned = await findOwnedMatrix(c.env, c.get("accountId"), matrixId);
-  const matrix = owned?.matrix;
+  const matrix = await db.select().from(matrices).where(eq(matrices.id, matrixId)).get();
   if (!matrix) return c.json({ error: "MATRIX_NOT_FOUND", message: "矩阵不存在" }, 404);
-  const project = await db.select().from(projects).where(and(eq(projects.id, matrix.projectId), eq(projects.ownerId, c.get("accountId")))).get();
   const dimensionRows = await db.select().from(dimensions).where(eq(dimensions.matrixId, matrixId)).orderBy(asc(dimensions.sortOrder));
 
   // 互通:打开矩阵时自动把项目论文纳入矩阵(补 matrix_papers + 占位证据单元格)。
-  // 项目新增论文 → 矩阵自动出现;项目删论文 → FK 级联清掉该矩阵对应证据。
   const projectPaperRows = await db.select({ id: papers.id, sortOrder: projectPapers.sortOrder }).from(projectPapers)
     .innerJoin(papers, eq(projectPapers.paperId, papers.id))
-    .where(and(eq(projectPapers.projectId, matrix.projectId), eq(papers.ownerId, c.get("accountId")))).orderBy(asc(projectPapers.sortOrder));
+    .where(eq(projectPapers.projectId, matrix.projectId)).orderBy(asc(projectPapers.sortOrder));
   const existingMatrixPapers = await db.select({ paperId: matrixPapers.paperId }).from(matrixPapers).where(eq(matrixPapers.matrixId, matrixId));
   const inMatrix = new Set(existingMatrixPapers.map((row) => row.paperId));
   const missing = projectPaperRows.filter((row) => !inMatrix.has(row.id));
@@ -87,9 +83,9 @@ matrixRoutes.get("/matrices/:matrixId", async (c) => {
   }
 
   const paperRows = await db.select({ id: papers.id, name: papers.shortName, title: papers.title, venue: papers.venue, year: papers.year, hasFile: papers.r2Key, sortOrder: matrixPapers.sortOrder })
-    .from(matrixPapers).innerJoin(papers, eq(matrixPapers.paperId, papers.id)).where(and(eq(matrixPapers.matrixId, matrixId), eq(papers.ownerId, c.get("accountId")))).orderBy(asc(matrixPapers.sortOrder));
+    .from(matrixPapers).innerJoin(papers, eq(matrixPapers.paperId, papers.id)).where(eq(matrixPapers.matrixId, matrixId)).orderBy(asc(matrixPapers.sortOrder));
   const cellRows = await db.select().from(evidenceCells).where(eq(evidenceCells.matrixId, matrixId));
-  return c.json(matrixResponse({ id: matrix.id, name: matrix.name, description: matrix.description, extractionProgress: matrix.extractionProgress }, paperRows, dimensionRows, cellRows, project?.id ?? matrix.projectId));
+  return c.json(matrixResponse({ id: matrix.id, name: matrix.name, description: matrix.description, extractionProgress: matrix.extractionProgress }, paperRows, dimensionRows, cellRows, matrix.projectId));
 });
 
 function matrixResponse(project: { id: string; name: string; description: string | null; extractionProgress: number }, paperRows: Array<{ id: string; name: string; title: string; venue: string; year: number; hasFile: string | null; sortOrder: number }>, dimensionRows: Array<typeof dimensions.$inferSelect>, cellRows: Array<typeof evidenceCells.$inferSelect>, projectId = project.id) {
@@ -105,7 +101,7 @@ function matrixResponse(project: { id: string; name: string; description: string
 matrixRoutes.get("/projects/:projectId/matrix", async (c) => {
   const db = createDatabase(c.env);
   const projectId = c.req.param("projectId");
-  const project = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.ownerId, c.get("accountId")))).get();
+  const project = await db.select().from(projects).where(eq(projects.id, projectId)).get();
 
   if (!project) {
     return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
@@ -123,7 +119,7 @@ matrixRoutes.get("/projects/:projectId/matrix", async (c) => {
     })
     .from(projectPapers)
     .innerJoin(papers, eq(projectPapers.paperId, papers.id))
-    .where(and(eq(projectPapers.projectId, projectId), eq(papers.ownerId, c.get("accountId"))))
+    .where(eq(projectPapers.projectId, projectId))
     .orderBy(asc(projectPapers.sortOrder));
 
   const dimensionRows = await db
@@ -189,7 +185,7 @@ matrixRoutes.patch("/evidence/:evidenceId", async (c) => {
 
   const db = createDatabase(c.env);
   const evidenceId = c.req.param("evidenceId");
-  const existing = (await findOwnedEvidence(c.env, c.get("accountId"), evidenceId))?.evidence;
+  const existing = await db.select().from(evidenceCells).where(eq(evidenceCells.id, evidenceId)).get();
 
   if (!existing) {
     return c.json({ error: "EVIDENCE_NOT_FOUND", message: "证据不存在" }, 404);
@@ -223,7 +219,7 @@ matrixRoutes.put("/evidence/:evidenceId/content", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_EVIDENCE", message: "AI 证据格式不正确", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const evidenceId = c.req.param("evidenceId");
-  const existing = (await findOwnedEvidence(c.env, c.get("accountId"), evidenceId))?.evidence;
+  const existing = await db.select().from(evidenceCells).where(eq(evidenceCells.id, evidenceId)).get();
   if (!existing) return c.json({ error: "EVIDENCE_NOT_FOUND", message: "证据不存在" }, 404);
   if (existing.locked) return c.json({ error: "EVIDENCE_LOCKED", message: "已锁定证据不会被 AI 覆盖" }, 409);
   await db.update(evidenceCells).set({ ...parsed.data, confidence: Math.round(parsed.data.confidence * 100), locked: false, updatedAt: new Date().toISOString() }).where(eq(evidenceCells.id, evidenceId));

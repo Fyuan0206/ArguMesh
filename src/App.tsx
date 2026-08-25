@@ -14,14 +14,11 @@ import { KnowledgePage } from "./pages/KnowledgePage";
 import { PaperPage } from "./pages/PaperPage";
 import { SearchPage } from "./pages/SearchPage";
 import { TasksPage } from "./pages/TasksPage";
-import { UsersPage } from "./pages/UsersPage";
 import { ResearchQuestionsPage } from "./pages/ResearchQuestionsPage";
 import { GapsPage } from "./pages/GapsPage";
 import { ExperimentsPage } from "./pages/ExperimentsPage";
-import { useAuth } from "./state/auth";
 import { ProjectProvider } from "./state/project";
 import { WorkspaceProvider } from "./state/workspace";
-import { LandingPage } from "./pages/LandingPage";
 
 const ReaderPage = lazy(() => import("./pages/ReaderPage").then((module) => ({ default: module.ReaderPage })));
 
@@ -54,17 +51,13 @@ function AppShell() {
 }
 
 export function App() {
-  const auth = useAuth();
-  if (!auth.hasToken) return <LandingPage />;
-  const accountId = auth.session?.accountId;
-  if (!accountId) return <LandingPage />;
-
+  // 单用户本地版:无登录,直接进入工作台。
   return (
-    <WorkspaceProvider accountId={accountId}>
+    <WorkspaceProvider>
       <ProjectProvider>
         <Routes>
           <Route element={<AppShell />}>
-            {/* 登录后落地项目列表;文献/矩阵等内容都在项目内部访问。 */}
+            {/* 落地项目列表;文献/矩阵等内容都在项目内部访问。 */}
             <Route index element={<Navigate to="/projects" replace />} />
             <Route path="/home" element={<Navigate to="/projects" replace />} />
             <Route path="/projects" element={<ProjectsPage />} />
@@ -74,7 +67,7 @@ export function App() {
             <Route path="/projects/:projectId/library/:paperId/read" element={<Suspense fallback={<div className="reader-route-loading">正在加载 PDF 阅读器…</div>}><ReaderPage /></Suspense>} />
             <Route path="/projects/:projectId/matrices" element={<MatricesIndexPage />} />
             <Route path="/projects/:projectId/matrices/:matrixId" element={<MatrixPage />} />
-            {/* 研究弧(v2.0):Research Question 脊柱 / Gap / Experiment,均项目作用域。全局路由由 ProjectGate 处理无 projectId 情况。 */}
+            {/* 研究弧(v2.0):Research Question 脊柱 / Gap / Experiment,均项目作用域。 */}
             <Route path="/projects/:projectId/questions" element={<ResearchQuestionsPage />} />
             <Route path="/projects/:projectId/gaps" element={<GapsPage />} />
             <Route path="/projects/:projectId/experiments" element={<ExperimentsPage />} />
@@ -91,7 +84,6 @@ export function App() {
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/users" element={auth.session?.role === "admin" ? <UsersPage /> : <Navigate to="/projects" replace />} />
             <Route path="*" element={<Navigate to="/projects" replace />} />
           </Route>
         </Routes>

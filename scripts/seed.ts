@@ -3,11 +3,10 @@ import { createClient } from "@libsql/client";
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { hashPassword } from "../server/auth/password";
 
 /**
- * 全新安装入口:建表(IF NOT EXISTS)+ 种子默认管理员 admin/admin123 + 演示项目。
- * 幂等可重复运行:账户按用户名冲突跳过,演示数据使用固定 id(INSERT OR IGNORE)。
+ * 全新安装入口:建表(IF NOT EXISTS)+ 演示项目(单用户本地版,无账户)。
+ * 幂等可重复运行:演示数据使用固定 id(INSERT OR IGNORE)。
  * 所有迁移文件会在 __drizzle_migrations 登记为已应用,后续 schema 升级用 db:migrate。
  */
 
@@ -23,7 +22,6 @@ await client.executeMultiple(`
 
   CREATE TABLE IF NOT EXISTS projects (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     name text NOT NULL,
     description text,
     extraction_progress integer DEFAULT 0 NOT NULL,
@@ -33,7 +31,6 @@ await client.executeMultiple(`
   );
   CREATE TABLE IF NOT EXISTS papers (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     title text NOT NULL,
     short_name text NOT NULL,
     authors text DEFAULT '' NOT NULL,
@@ -136,7 +133,6 @@ await client.executeMultiple(`
     ON extraction_jobs (project_id, created_at);
   CREATE TABLE IF NOT EXISTS paper_files (
     paper_id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     data blob NOT NULL,
     mime_type text NOT NULL,
     file_size integer NOT NULL,
@@ -144,27 +140,17 @@ await client.executeMultiple(`
     updated_at text NOT NULL,
     FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE cascade
   );
-  CREATE TABLE IF NOT EXISTS accounts (
-    id text PRIMARY KEY NOT NULL,
-    name text NOT NULL,
-    password_hash text NOT NULL,
-    role text DEFAULT 'researcher' NOT NULL,
-    created_at text NOT NULL
-  );
-  CREATE UNIQUE INDEX IF NOT EXISTS accounts_name_unique ON accounts (name);
   CREATE TABLE IF NOT EXISTS ai_settings (
-    account_id text PRIMARY KEY NOT NULL,
+    account_id text PRIMARY KEY NOT NULL DEFAULT 'local',
     base_url text NOT NULL,
     api_key text NOT NULL,
     model text DEFAULT '' NOT NULL,
-    updated_at text NOT NULL,
-    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE cascade
+    updated_at text NOT NULL
   );
 
   -- ═══ 研究弧(迁移 0007,v2.0):Knowledge → EvidenceLayer → Gap → Idea → Review → Experiment,以 RQ 为脊柱 ═══
   CREATE TABLE IF NOT EXISTS knowledge_items (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     project_id text NOT NULL,
     paper_id text NOT NULL,
     kind text DEFAULT 'note' NOT NULL,
@@ -184,10 +170,8 @@ await client.executeMultiple(`
     FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE cascade
   );
   CREATE INDEX IF NOT EXISTS knowledge_items_project_created_idx ON knowledge_items (project_id, created_at);
-  CREATE INDEX IF NOT EXISTS knowledge_items_owner_idx ON knowledge_items (owner_id);
   CREATE TABLE IF NOT EXISTS knowledge_relations (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     project_id text NOT NULL,
     source_id text NOT NULL,
     target_id text NOT NULL,
@@ -202,7 +186,6 @@ await client.executeMultiple(`
   CREATE INDEX IF NOT EXISTS knowledge_relations_project_idx ON knowledge_relations (project_id);
   CREATE TABLE IF NOT EXISTS research_questions (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     project_id text NOT NULL,
     question text NOT NULL,
     goal text DEFAULT '' NOT NULL,
@@ -215,7 +198,6 @@ await client.executeMultiple(`
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
   );
   CREATE INDEX IF NOT EXISTS rq_project_created_idx ON research_questions (project_id, created_at);
-  CREATE INDEX IF NOT EXISTS rq_owner_idx ON research_questions (owner_id);
   CREATE TABLE IF NOT EXISTS rq_papers (
     rq_id text NOT NULL,
     paper_id text NOT NULL,
@@ -230,7 +212,6 @@ await client.executeMultiple(`
   CREATE INDEX IF NOT EXISTS rq_papers_project_idx ON rq_papers (project_id);
   CREATE TABLE IF NOT EXISTS gaps (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     project_id text NOT NULL,
     paper_id text,
     rq_id text,
@@ -249,7 +230,6 @@ await client.executeMultiple(`
     FOREIGN KEY (rq_id) REFERENCES research_questions(id) ON DELETE set null
   );
   CREATE INDEX IF NOT EXISTS gaps_project_created_idx ON gaps (project_id, created_at);
-  CREATE INDEX IF NOT EXISTS gaps_owner_idx ON gaps (owner_id);
   CREATE INDEX IF NOT EXISTS gaps_rq_idx ON gaps (rq_id);
   CREATE TABLE IF NOT EXISTS gap_evidence (
     id text PRIMARY KEY NOT NULL,
@@ -265,7 +245,6 @@ await client.executeMultiple(`
   CREATE INDEX IF NOT EXISTS gap_evidence_gap_idx ON gap_evidence (gap_id);
   CREATE TABLE IF NOT EXISTS ideas (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     project_id text NOT NULL,
     source_gap_id text,
     rq_id text,
@@ -280,7 +259,6 @@ await client.executeMultiple(`
     FOREIGN KEY (rq_id) REFERENCES research_questions(id) ON DELETE set null
   );
   CREATE INDEX IF NOT EXISTS ideas_project_created_idx ON ideas (project_id, created_at);
-  CREATE INDEX IF NOT EXISTS ideas_owner_idx ON ideas (owner_id);
   CREATE INDEX IF NOT EXISTS ideas_gap_idx ON ideas (source_gap_id);
   CREATE INDEX IF NOT EXISTS ideas_rq_idx ON ideas (rq_id);
   CREATE TABLE IF NOT EXISTS idea_versions (
@@ -313,7 +291,6 @@ await client.executeMultiple(`
   CREATE INDEX IF NOT EXISTS idea_evidence_idea_idx ON idea_evidence (idea_id);
   CREATE TABLE IF NOT EXISTS idea_reviews (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     idea_id text NOT NULL,
     reviewer text NOT NULL,
     verdict text DEFAULT 'viable' NOT NULL,
@@ -333,10 +310,8 @@ await client.executeMultiple(`
     FOREIGN KEY (revised_version_id) REFERENCES idea_versions(id) ON DELETE set null
   );
   CREATE INDEX IF NOT EXISTS idea_reviews_idea_created_idx ON idea_reviews (idea_id, created_at);
-  CREATE INDEX IF NOT EXISTS idea_reviews_owner_idx ON idea_reviews (owner_id);
   CREATE TABLE IF NOT EXISTS experiments (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     project_id text NOT NULL,
     idea_id text,
     rq_id text,
@@ -358,7 +333,6 @@ await client.executeMultiple(`
     FOREIGN KEY (rq_id) REFERENCES research_questions(id) ON DELETE set null
   );
   CREATE INDEX IF NOT EXISTS experiments_project_created_idx ON experiments (project_id, created_at);
-  CREATE INDEX IF NOT EXISTS experiments_owner_idx ON experiments (owner_id);
   CREATE INDEX IF NOT EXISTS experiments_idea_idx ON experiments (idea_id);
   CREATE INDEX IF NOT EXISTS experiments_rq_idx ON experiments (rq_id);
   CREATE TABLE IF NOT EXISTS experiment_results (
@@ -375,7 +349,6 @@ await client.executeMultiple(`
   CREATE UNIQUE INDEX IF NOT EXISTS experiment_results_exp_run_uniq ON experiment_results (experiment_id, run_no);
   CREATE TABLE IF NOT EXISTS evidence_layers (
     id text PRIMARY KEY NOT NULL,
-    owner_id text NOT NULL,
     project_id text NOT NULL,
     paper_id text NOT NULL,
     knowledge_item_id text,
@@ -397,25 +370,17 @@ await client.executeMultiple(`
     FOREIGN KEY (knowledge_item_id) REFERENCES knowledge_items(id) ON DELETE cascade
   );
   CREATE INDEX IF NOT EXISTS evidence_layers_project_created_idx ON evidence_layers (project_id, created_at);
-  CREATE INDEX IF NOT EXISTS evidence_layers_owner_idx ON evidence_layers (owner_id);
   CREATE INDEX IF NOT EXISTS evidence_layers_knowledge_idx ON evidence_layers (knowledge_item_id);
   CREATE INDEX IF NOT EXISTS evidence_layers_parent_idx ON evidence_layers (parent_id);
 `);
 
 const now = new Date().toISOString();
 
-// --- 默认管理员:admin / admin123 ---
-await client.execute({
-  sql: "INSERT OR IGNORE INTO accounts (id, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
-  args: ["account-admin", "admin", await hashPassword("admin123"), "admin", now],
-});
-console.log("已确保管理员账户 admin / admin123(首次登录后请尽快修改密码)。");
-
 // --- 演示项目(固定 id,幂等)---
 const projectId = "demo-occluded-pose";
 await client.execute({
-  sql: "INSERT OR IGNORE INTO projects (id, owner_id, name, description, extraction_progress, created_at, sort_order) VALUES (?, ?, ?, ?, 0, ?, 0)",
-  args: [projectId, "account-admin", "示例项目:遮挡姿态估计", "演示数据,展示「项目 → 文献 → 证据矩阵」完整流程。全部论文为占位示例,请替换为真实文献后使用。", now],
+  sql: "INSERT OR IGNORE INTO projects (id, name, description, extraction_progress, created_at, sort_order) VALUES (?, ?, ?, 0, ?, 0)",
+  args: [projectId, "示例项目:遮挡姿态估计", "演示数据,展示「项目 → 文献 → 证据矩阵」完整流程。全部论文为占位示例,请替换为真实文献后使用。", now],
 });
 
 const demoPapers = [
@@ -427,8 +392,8 @@ const demoPapers = [
 ];
 for (const [index, paper] of demoPapers.entries()) {
   await client.execute({
-    sql: "INSERT OR IGNORE INTO papers (id, owner_id, title, short_name, authors, venue, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    args: [paper.id, "account-admin", paper.title, paper.shortName, paper.authors, paper.venue, paper.year, now],
+    sql: "INSERT OR IGNORE INTO papers (id, title, short_name, authors, venue, year, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    args: [paper.id, paper.title, paper.shortName, paper.authors, paper.venue, paper.year, now],
   });
   await client.execute({
     sql: "INSERT OR IGNORE INTO project_papers (project_id, paper_id, sort_order) VALUES (?, ?, ?)",
@@ -482,4 +447,4 @@ for (const entry of journal.entries) {
 console.log(`已登记 ${journal.entries.length} 个 Drizzle 迁移。`);
 
 client.close();
-console.log("种子完成:管理员 admin / admin123,演示项目 demo-occluded-pose。运行 pnpm run dev 即可开始使用。");
+console.log("种子完成:演示项目 demo-occluded-pose。运行 pnpm run dev 即可开始使用。");

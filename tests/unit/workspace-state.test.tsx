@@ -53,7 +53,7 @@ describe("WorkspaceProvider", () => {
     await act(async () => host.querySelector("button")?.click());
 
     expect(counts.at(-1)).toBe(1);
-    const stored = JSON.parse(window.localStorage.getItem("paperidea_workspace_v2_test-account") ?? "{}") as { projects?: Array<{ name: string }> };
+    const stored = JSON.parse(window.localStorage.getItem("paperidea_workspace_v2_local") ?? "{}") as { projects?: Array<{ name: string }> };
     expect(stored.projects?.[0]?.name).toBe("测试项目");
 
     await act(async () => root.unmount());
@@ -80,7 +80,7 @@ describe("WorkspaceProvider", () => {
     });
 
     expect(counts.at(-1)).toBe(1);
-    expect(window.localStorage.getItem("paperidea_workspace_v2_test-account")).toContain("重新登录后仍存在");
+    expect(window.localStorage.getItem("paperidea_workspace_v2_local")).toContain("重新登录后仍存在");
 
     await act(async () => root.unmount());
   });
@@ -109,7 +109,7 @@ describe("WorkspaceProvider", () => {
 
     expect(api.listProjects).toHaveBeenCalledWith(true);
     expect(counts.at(-1)).toBe(1);
-    const stored = window.localStorage.getItem("paperidea_workspace_v2_test-account") ?? "";
+    const stored = window.localStorage.getItem("paperidea_workspace_v2_local") ?? "";
     expect(stored).toContain("云端项目");
     expect(stored).not.toContain("本地待同步");
 
@@ -151,35 +151,11 @@ describe("WorkspaceProvider", () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
     expect(papersSnapshot.at(-1)).toEqual([{ id: "paper-a", title: "云端论文A", projectIds: ["project-cloud"] }]);
-    const stored = JSON.parse(window.localStorage.getItem("paperidea_workspace_v2_test-account") ?? "{}") as { papers?: unknown[] };
+    const stored = JSON.parse(window.localStorage.getItem("paperidea_workspace_v2_local") ?? "{}") as { papers?: unknown[] };
     expect(stored.papers).toHaveLength(1);
     await act(async () => root.unmount());
   });
 
-  it("keeps browser workspace data isolated by account", async () => {
-    const chenHost = document.createElement("div");
-    document.body.append(chenHost);
-    const chenRoot = createRoot(chenHost);
-    await act(async () => {
-      chenRoot.render(<WorkspaceProvider accountId="chen-fuyuan"><Harness onCount={() => {}} /></WorkspaceProvider>);
-    });
-    await act(async () => chenHost.querySelector("button")?.click());
-    await act(async () => chenRoot.unmount());
-
-    const luoHost = document.createElement("div");
-    document.body.append(luoHost);
-    const luoCounts: number[] = [];
-    const luoRoot = createRoot(luoHost);
-    await act(async () => {
-      luoRoot.render(<WorkspaceProvider accountId="luo-murong"><Harness onCount={(count) => luoCounts.push(count)} /></WorkspaceProvider>);
-    });
-
-    expect(luoCounts.at(-1)).toBe(0);
-    expect(window.localStorage.getItem("paperidea_workspace_v2_chen-fuyuan")).toContain("测试项目");
-    expect(window.localStorage.getItem("paperidea_workspace_v2_luo-murong")).not.toContain("测试项目");
-
-    await act(async () => luoRoot.unmount());
-  });
 
   it("links a new paper only to its selected project", async () => {
     const host = document.createElement("div");
@@ -210,7 +186,7 @@ describe("WorkspaceProvider", () => {
     await act(async () => host.querySelector("button")?.click());
 
     expect(counts.at(-1)).toBe(1);
-    const stored = JSON.parse(window.localStorage.getItem("paperidea_workspace_v2_test-account") ?? "{}") as { matrices?: Array<{ name: string; projectId: string; paperIds: string[]; dimensions: unknown[]; cells: Record<string, { status: string }> }> };
+    const stored = JSON.parse(window.localStorage.getItem("paperidea_workspace_v2_local") ?? "{}") as { matrices?: Array<{ name: string; projectId: string; paperIds: string[]; dimensions: unknown[]; cells: Record<string, { status: string }> }> };
     const matrix = stored.matrices?.find((item) => item.name === "测试矩阵");
     expect(matrix?.projectId).toBe("proj-mat");
     expect(matrix?.paperIds).toEqual(["paper-a", "paper-b"]);

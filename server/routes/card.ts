@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
@@ -95,14 +95,14 @@ cardRoutes.post("/papers/:paperId/card", async (c) => {
   const paper = await db
     .select({ id: papers.id, title: papers.title })
     .from(papers)
-    .where(and(eq(papers.id, c.req.param("paperId")), eq(papers.ownerId, c.get("accountId"))))
+    .where(eq(papers.id, c.req.param("paperId")))
     .get();
   if (!paper) return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
 
-  // 设置页保存的账户级 AI 配置优先;请求体 provider/model(可选)仅在环境变量厂商模式下生效。
+  // 设置页保存的全局 AI 配置优先;请求体 provider/model(可选)仅在环境变量厂商模式下生效。
   const selectedProvider = parsed.data.provider?.trim() || undefined;
   const selectedModel = parsed.data.model?.trim() || undefined;
-  const resolution = await resolveAiForRequest(c.env, c.get("accountId"), { provider: selectedProvider, model: selectedModel });
+  const resolution = await resolveAiForRequest(c.env, { provider: selectedProvider, model: selectedModel });
   if ("error" in resolution) {
     return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
   }

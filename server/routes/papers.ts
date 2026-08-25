@@ -39,7 +39,6 @@ export const paperRoutes = new Hono<AppEnv>();
 
 interface PaperRow {
   id: string;
-  ownerId: string;
   title: string;
   shortName: string;
   authors: string;
@@ -99,13 +98,12 @@ function paperToDto(row: PaperRow) {
 
 paperRoutes.get("/papers", async (c) => {
   const db = createDatabase(c.env);
-  const ownerId = c.get("accountId");
   const url = c.req.query("projectId");
   if (url) {
     const rows = await db.select().from(papers)
       .innerJoin(projectPapers, eq(projectPapers.paperId, papers.id))
       .innerJoin(projects, eq(projectPapers.projectId, projects.id))
-      .where(and(eq(projectPapers.projectId, url), eq(projects.ownerId, ownerId), eq(papers.ownerId, ownerId), isNull(papers.archivedAt)))
+      .where(and(eq(projectPapers.projectId, url), isNull(papers.archivedAt)))
       .orderBy(asc(projectPapers.sortOrder), asc(papers.createdAt))
       .all();
     return c.json({ papers: rows.map((r) => paperToDto(r.papers as PaperRow)) });
@@ -114,13 +112,13 @@ paperRoutes.get("/papers", async (c) => {
   if (!parsed.success || !parsed.data.ids) return c.json({ error: "MISSING_IDS", message: "请提供 ids 查询参数" }, 400);
   const ids = [...new Set(parsed.data.ids.split(",").map((id) => id.trim()).filter(Boolean).slice(0, 200))];
   if (ids.length === 0) return c.json({ papers: [] });
-  const rows = await db.select().from(papers).where(and(eq(papers.ownerId, ownerId), inArray(papers.id, ids))).all();
+  const rows = await db.select().from(papers).where(inArray(papers.id, ids)).all();
   return c.json({ papers: rows.map((row) => paperToDto(row as PaperRow)) });
 });
 
 paperRoutes.get("/papers/:paperId", async (c) => {
   const db = createDatabase(c.env);
-  const row = await db.select().from(papers).where(and(eq(papers.id, c.req.param("paperId")), eq(papers.ownerId, c.get("accountId")))).get();
+  const row = await db.select().from(papers).where(eq(papers.id, c.req.param("paperId"))).get();
   if (!row) return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
   return c.json({ paper: paperToDto(row as PaperRow) });
 });
@@ -131,8 +129,7 @@ paperRoutes.patch("/papers/:paperId", async (c) => {
   if (Object.keys(parsed.data).length === 0) return c.json({ error: "NO_FIELDS_TO_UPDATE", message: "至少提供一个待更新字段" }, 400);
   const db = createDatabase(c.env);
   const id = c.req.param("paperId");
-  const ownerCondition = and(eq(papers.id, id), eq(papers.ownerId, c.get("accountId")));
-  const existing = await db.select({ id: papers.id }).from(papers).where(ownerCondition).get();
+  const existing = await db.select({ id: papers.id }).from(papers).where(eq(papers.id, id)).get();
   if (!existing) return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
 
   const set: Partial<typeof papers.$inferInsert> = {};
@@ -152,8 +149,8 @@ paperRoutes.patch("/papers/:paperId", async (c) => {
   if (data.pageCount !== undefined) set.pageCount = data.pageCount;
   if (data.outline !== undefined) set.outlineJson = JSON.stringify(data.outline);
 
-  await db.update(papers).set(set).where(ownerCondition);
-  const updated = await db.select().from(papers).where(ownerCondition).get();
+  await db.update(papers).set(set).where(eq(papers.id, id));
+  const updated = await db.select().from(papers).where(eq(papers.id, id)).get();
   return c.json({ paper: paperToDto(updated as PaperRow) });
 });
 
@@ -162,11 +159,10 @@ paperRoutes.patch("/papers/:paperId/archive", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_ARCHIVE_VALUE", message: "需要提供 archived 布尔值" }, 400);
   const db = createDatabase(c.env);
   const id = c.req.param("paperId");
-  const ownerCondition = and(eq(papers.id, id), eq(papers.ownerId, c.get("accountId")));
-  const existing = await db.select({ id: papers.id }).from(papers).where(ownerCondition).get();
+  const existing = await db.select({ id: papers.id }).from(papers).where(eq(papers.id, id)).get();
   if (!existing) return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
   const archivedAt = parsed.data.archived ? new Date().toISOString() : null;
-  await db.update(papers).set({ archivedAt }).where(ownerCondition);
+  await db.update(papers).set({ archivedAt }).where(eq(papers.id, id));
   return c.json({ id, archived: parsed.data.archived, archivedAt });
 });
 
@@ -178,10 +174,9 @@ paperRoutes.patch("/papers/:paperId/archive", async (c) => {
 paperRoutes.delete("/papers/:paperId", async (c) => {
   const db = createDatabase(c.env);
   const id = c.req.param("paperId");
-  const row = await db.select({ id: papers.id }).from(papers)
-    .where(and(eq(papers.id, id), eq(papers.ownerId, c.get("accountId")))).get();
+  const row = await db.select({ id: papers.id }).from(papers).where(eq(papers.id, id)).get();
   if (!row) return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
-  await db.delete(papers).where(and(eq(papers.id, id), eq(papers.ownerId, c.get("accountId"))));
+  await db.delete(papers).where(eq(papers.id, id));
   return c.json({ paperId: id, deleted: true });
 });
 
@@ -189,8 +184,8 @@ paperRoutes.delete("/papers/:paperId/project/:projectId", async (c) => {
   const db = createDatabase(c.env);
   const paperId = c.req.param("paperId");
   const projectId = c.req.param("projectId");
-  const ownedProject = await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, projectId), eq(projects.ownerId, c.get("accountId")))).get();
-  const ownedPaper = await db.select({ id: papers.id }).from(papers).where(and(eq(papers.id, paperId), eq(papers.ownerId, c.get("accountId")))).get();
+  const ownedProject = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId)).get();
+  const ownedPaper = await db.select({ id: papers.id }).from(papers).where(eq(papers.id, paperId)).get();
   if (!ownedProject || !ownedPaper) return c.json({ error: "LINK_NOT_FOUND", message: "论文未关联到此项目" }, 404);
   const link = await db.select().from(projectPapers)
     .where(and(eq(projectPapers.projectId, projectId), eq(projectPapers.paperId, paperId)))

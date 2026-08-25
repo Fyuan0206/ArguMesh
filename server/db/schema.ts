@@ -2,7 +2,6 @@ import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
-  ownerId: text("owner_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
   extractionProgress: integer("extraction_progress").notNull().default(0),
@@ -13,7 +12,6 @@ export const projects = sqliteTable("projects", {
 
 export const papers = sqliteTable("papers", {
   id: text("id").primaryKey(),
-  ownerId: text("owner_id").notNull(),
   title: text("title").notNull(),
   shortName: text("short_name").notNull(),
   authors: text("authors").notNull().default(""),
@@ -41,7 +39,6 @@ export const papers = sqliteTable("papers", {
 /** PDF 文件本体:存储在 Turso 数据库内(替代 R2;每篇论文至多一行,随论文级联删除)。 */
 export const paperFiles = sqliteTable("paper_files", {
   paperId: text("paper_id").primaryKey().references(() => papers.id, { onDelete: "cascade" }),
-  ownerId: text("owner_id").notNull(),
   data: blob("data", { mode: "buffer" }).$type<Uint8Array>().notNull(),
   mimeType: text("mime_type").notNull(),
   fileSize: integer("file_size").notNull(),
@@ -143,18 +140,12 @@ export const extractionJobs = sqliteTable(
   (table) => [index("extraction_jobs_project_created_idx").on(table.projectId, table.createdAt)],
 );
 
-/** 登录账户:默认种子 admin/admin123(管理员),admin 可通过 /api/users 管理其他账户。 */
-export const accounts = sqliteTable("accounts", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  role: text("role", { enum: ["admin", "researcher"] }).notNull().default("researcher"),
-  createdAt: text("created_at").notNull(),
-});
-
-/** 账户级 AI 配置:设置页表单填写(Base URL / API Key / 模型名称),优先于环境变量里的厂商配置。 */
+/**
+ * 全局 AI 配置(单用户本地版):设置页表单填写(Base URL / API Key / 模型名称),优先于环境变量里的厂商配置。
+ * 单行表,固定 account_id="local"(无 FK)—— 个人工作台无账号概念,只有一条全局 AI 配置。
+ */
 export const aiSettings = sqliteTable("ai_settings", {
-  accountId: text("account_id").primaryKey().references(() => accounts.id, { onDelete: "cascade" }),
+  accountId: text("account_id").primaryKey().default("local"),
   baseUrl: text("base_url").notNull(),
   apiKey: text("api_key").notNull(),
   model: text("model").notNull().default(""),
@@ -172,13 +163,12 @@ export const aiSettings = sqliteTable("ai_settings", {
  * - Atomic Evidence:页面级原子证据(本表 kind=evidence),与 evidence_cells(矩阵格)是不同粒度,不合并。
  * - provenance 是硬约束:quote=原文、content=AI/人工整理后内容(二者分离)、page、model、generatedAt、
  *   source(ai/human)、status(draft/confirmed)。AI 提炼由后端直接插 draft,前端无法伪造来源。
- * - ownerId 存归属账号(普通字符串,无 FK 耦合降低改动风险);paperId/projectId 走外键级联。
+ * - 单用户本地版:无账号归属列;paperId/projectId 走外键级联。
  */
 export const knowledgeItems = sqliteTable(
   "knowledge_items",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     paperId: text("paper_id").notNull().references(() => papers.id, { onDelete: "cascade" }),
     kind: text("kind", { enum: ["note", "claim", "evidence"] }).notNull().default("note"),
@@ -197,7 +187,6 @@ export const knowledgeItems = sqliteTable(
   },
   (table) => [
     index("knowledge_items_project_created_idx").on(table.projectId, table.createdAt),
-    index("knowledge_items_owner_idx").on(table.ownerId),
   ],
 );
 
@@ -211,7 +200,6 @@ export const knowledgeRelations = sqliteTable(
   "knowledge_relations",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     sourceId: text("source_id").notNull().references(() => knowledgeItems.id, { onDelete: "cascade" }),
     targetId: text("target_id").notNull().references(() => knowledgeItems.id, { onDelete: "cascade" }),
@@ -231,13 +219,12 @@ export const knowledgeRelations = sqliteTable(
  * Paper → Evidence → Gap → Idea 都挂到它上面。
  * - 状态机:open(提出)→ investigating(调研中)→ evidenced(证据充分)→ concluded(已结论)
  *   或任一阶段 → abandoned(已搁置)。
- * - provenance:source(human/ai)、model、generatedAt。ownerId 存归属账号;projectId 走外键级联。
+ * - provenance:source(human/ai)、model、generatedAt。projectId 走外键级联。
  */
 export const researchQuestions = sqliteTable(
   "research_questions",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     question: text("question").notNull(),
     goal: text("goal").notNull().default(""),
@@ -250,7 +237,6 @@ export const researchQuestions = sqliteTable(
   },
   (table) => [
     index("rq_project_created_idx").on(table.projectId, table.createdAt),
-    index("rq_owner_idx").on(table.ownerId),
   ],
 );
 
@@ -271,7 +257,7 @@ export const rqPapers = sqliteTable(
 );
 
 /**
- * 研究缺口(迁移 0009):Gap 一等对象。
+ * 研究缺口(迁移 0007):Gap 一等对象。
  * - 状态机:candidate(候选)→ searching(补充检索)→ evidenced(证据充分)→ converted(已转 Idea)
  *   或任一阶段 → rejected(已否决)。
  * - provenance:source(human/ai)、model、generatedAt;AI Gap Discovery 由后端直接插 draft。
@@ -280,7 +266,6 @@ export const gaps = sqliteTable(
   "gaps",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     paperId: text("paper_id").references(() => papers.id, { onDelete: "set null" }),
     rqId: text("rq_id").references(() => researchQuestions.id, { onDelete: "set null" }),
@@ -297,12 +282,11 @@ export const gaps = sqliteTable(
   },
   (table) => [
     index("gaps_project_created_idx").on(table.projectId, table.createdAt),
-    index("gaps_owner_idx").on(table.ownerId),
     index("gaps_rq_idx").on(table.rqId),
   ],
 );
 
-/** 缺口与证据的关联(迁移 0009):一条缺口可挂多条 knowledge_items 作为支撑/反驳/上下文证据。 */
+/** 缺口与证据的关联(迁移 0007):一条缺口可挂多条 knowledge_items 作为支撑/反驳/上下文证据。 */
 export const gapEvidence = sqliteTable(
   "gap_evidence",
   {
@@ -329,7 +313,6 @@ export const ideas = sqliteTable(
   "ideas",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     sourceGapId: text("source_gap_id").references(() => gaps.id, { onDelete: "set null" }),
     rqId: text("rq_id").references(() => researchQuestions.id, { onDelete: "set null" }),
@@ -344,7 +327,6 @@ export const ideas = sqliteTable(
   },
   (table) => [
     index("ideas_project_created_idx").on(table.projectId, table.createdAt),
-    index("ideas_owner_idx").on(table.ownerId),
     index("ideas_gap_idx").on(table.sourceGapId),
     index("ideas_rq_idx").on(table.rqId),
   ],
@@ -400,7 +382,6 @@ export const ideaReviews = sqliteTable(
   "idea_reviews",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     ideaId: text("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
     reviewer: text("reviewer").notNull(),
     verdict: text("verdict", { enum: ["strong", "viable", "weak", "reject"] }).notNull().default("viable"),
@@ -418,7 +399,6 @@ export const ideaReviews = sqliteTable(
   },
   (table) => [
     index("idea_reviews_idea_created_idx").on(table.ideaId, table.createdAt),
-    index("idea_reviews_owner_idx").on(table.ownerId),
   ],
 );
 
@@ -432,7 +412,6 @@ export const experiments = sqliteTable(
   "experiments",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     ideaId: text("idea_id").references(() => ideas.id, { onDelete: "set null" }),
     rqId: text("rq_id").references(() => researchQuestions.id, { onDelete: "set null" }),
@@ -452,7 +431,6 @@ export const experiments = sqliteTable(
   },
   (table) => [
     index("experiments_project_created_idx").on(table.projectId, table.createdAt),
-    index("experiments_owner_idx").on(table.ownerId),
     index("experiments_idea_idx").on(table.ideaId),
     index("experiments_rq_idx").on(table.rqId),
   ],
@@ -490,7 +468,6 @@ export const evidenceLayers = sqliteTable(
   "evidence_layers",
   {
     id: text("id").primaryKey(),
-    ownerId: text("owner_id").notNull(),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     paperId: text("paper_id").notNull().references(() => papers.id, { onDelete: "cascade" }),
     knowledgeItemId: text("knowledge_item_id").references(() => knowledgeItems.id, { onDelete: "cascade" }),
@@ -510,7 +487,6 @@ export const evidenceLayers = sqliteTable(
   },
   (table) => [
     index("evidence_layers_project_created_idx").on(table.projectId, table.createdAt),
-    index("evidence_layers_owner_idx").on(table.ownerId),
     index("evidence_layers_knowledge_idx").on(table.knowledgeItemId),
     index("evidence_layers_parent_idx").on(table.parentId),
   ],

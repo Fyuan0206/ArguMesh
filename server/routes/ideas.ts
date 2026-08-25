@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { findOwnedProject } from "../auth/ownership";
+import { projectExists } from "../db/projects";
 import { createDatabase } from "../db/client";
 import { gaps, ideaEvidence, ideaVersions, ideas, knowledgeItems } from "../db/schema";
 import { resolveAiForRequest } from "../services/ai";
@@ -14,7 +14,7 @@ import type { AppEnv } from "../types";
  *   从不覆盖旧版。本表只保留指向「当前版本」的 currentVersionId,首次创建同时写入版本 1。
  * - **provenance**:sourceGapId 记录由哪个 Gap 转来(可空);版本行带 createdBy(human/ai)+ model + generatedAt。
  * - AI 后端直接存 draft(同 C4),前端无法伪造来源;后端构 AI context 只读本项目知识(C9),不读 PDF(C10)。
- * - 权限复用 findOwnedProject;evidence 挂载须校验知识对象属本项目+本账号。
+ * - evidence 挂载须校验知识对象属本项目(单用户本地版,无账号归属)。
  */
 
 const IDEA_STATUSES = ["Inbox", "Draft", "Reviewing", "Revise", "Approved", "Experimenting", "Writing", "Archived"] as const;
@@ -34,7 +34,6 @@ const EMPTY_CANVAS: IdeaCanvas = { problem: "", gap: "", hypothesis: "", method:
 
 interface IdeaRow {
   id: string;
-  ownerId: string;
   projectId: string;
   sourceGapId: string | null;
   title: string;
@@ -61,7 +60,6 @@ interface VersionRow {
 
 const IDEA_SELECT = {
   id: ideas.id,
-  ownerId: ideas.ownerId,
   projectId: ideas.projectId,
   sourceGapId: ideas.sourceGapId,
   title: ideas.title,
@@ -201,15 +199,15 @@ async function assembleIdea(db: ReturnType<typeof createDatabase>, idea: IdeaRow
 }
 
 /** 校验 sourceGapId 属于本项目+本账号(转换入口用)。 */
-async function ownedGapInProject(db: ReturnType<typeof createDatabase>, projectId: string, accountId: string, gapId: string) {
+async function ownedGapInProject(db: ReturnType<typeof createDatabase>, projectId: string, gapId: string) {
   return db.select({ id: gaps.id }).from(gaps)
-    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId), eq(gaps.ownerId, accountId))).get();
+    .where(and(eq(gaps.id, gapId), eq(gaps.projectId, projectId))).get();
 }
 
-/** 校验 knowledgeItemId 属于本项目+本账号。 */
-async function ownedKnowledgeInProject(db: ReturnType<typeof createDatabase>, projectId: string, accountId: string, itemId: string) {
+/** 校验 knowledgeItemId 属于本项目。 */
+async function ownedKnowledgeInProject(db: ReturnType<typeof createDatabase>, projectId: string, itemId: string) {
   return db.select({ id: knowledgeItems.id, title: knowledgeItems.title, kind: knowledgeItems.kind, content: knowledgeItems.content }).from(knowledgeItems)
-    .where(and(eq(knowledgeItems.id, itemId), eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId))).get();
+    .where(and(eq(knowledgeItems.id, itemId), eq(knowledgeItems.projectId, projectId))).get();
 }
 
 export const ideaRoutes = new Hono<AppEnv>();
@@ -217,20 +215,19 @@ export const ideaRoutes = new Hono<AppEnv>();
 /** POST /projects/:projectId/ideas — 人工新建一条 Idea(落初始版本 1,createdBy:human)。 */
 ideaRoutes.post("/projects/:projectId/ideas", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_IDEA", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   // 转换入口:sourceGapId 须属本项目;转 Idea 后把该 Gap 标为 converted。
-  if (parsed.data.sourceGapId && !(await ownedGapInProject(db, projectId, accountId, parsed.data.sourceGapId))) {
+  if (parsed.data.sourceGapId && !(await ownedGapInProject(db, projectId, parsed.data.sourceGapId))) {
     return c.json({ error: "GAP_NOT_FOUND", message: "缺口不在当前项目中" }, 404);
   }
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const canvas: IdeaCanvas = { ...EMPTY_CANVAS, ...(parsed.data.canvas ?? {}) };
   await db.insert(ideas).values({
-    id, ownerId: accountId, projectId, sourceGapId: parsed.data.sourceGapId ?? null,
+    id, projectId, sourceGapId: parsed.data.sourceGapId ?? null,
     title: parsed.data.title, summary: parsed.data.summary, status: "Inbox",
     currentVersionId: null, createdAt: now, updatedAt: now,
   });
@@ -243,10 +240,10 @@ ideaRoutes.post("/projects/:projectId/ideas", async (c) => {
   // 把来源 Gap 推进到 converted(状态机:evidenced→converted);非终态前的失败不阻断 Idea 创建。
   if (parsed.data.sourceGapId) {
     await db.update(gaps).set({ status: "converted", updatedAt: now })
-      .where(and(eq(gaps.id, parsed.data.sourceGapId), eq(gaps.projectId, projectId), eq(gaps.ownerId, accountId)));
+      .where(and(eq(gaps.id, parsed.data.sourceGapId), eq(gaps.projectId, projectId)));
   }
   const row: IdeaRow = {
-    id, ownerId: accountId, projectId, sourceGapId: parsed.data.sourceGapId ?? null,
+    id, projectId, sourceGapId: parsed.data.sourceGapId ?? null,
     title: parsed.data.title, summary: parsed.data.summary, status: "Inbox",
     currentVersionId: null, createdAt: now, updatedAt: now,
   };
@@ -258,11 +255,10 @@ ideaRoutes.post("/projects/:projectId/ideas", async (c) => {
 /** GET /projects/:projectId/ideas — 列出本项目 Idea(每条附当前版本 + 证据)。 */
 ideaRoutes.get("/projects/:projectId/ideas", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const rows = await db.select(IDEA_SELECT).from(ideas)
-    .where(and(eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId)))
+    .where(and(eq(ideas.projectId, projectId)))
     .orderBy(desc(ideas.createdAt));
   const ideasOut = await Promise.all(rows.map((r) => assembleIdea(db, r as IdeaRow)));
   return c.json({ ideas: ideasOut });
@@ -272,11 +268,10 @@ ideaRoutes.get("/projects/:projectId/ideas", async (c) => {
 ideaRoutes.get("/projects/:projectId/ideas/:ideaId", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const idea = await db.select(IDEA_SELECT).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   const [assembled, versions] = await Promise.all([
     assembleIdea(db, idea as IdeaRow),
@@ -289,14 +284,13 @@ ideaRoutes.get("/projects/:projectId/ideas/:ideaId", async (c) => {
 ideaRoutes.patch("/projects/:projectId/ideas/:ideaId", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = patchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_IDEA_PATCH", issues: parsed.error.issues }, 400);
   if (Object.keys(parsed.data).length === 0) return c.json({ error: "EMPTY_PATCH", message: "没有要修改的内容" }, 400);
   const db = createDatabase(c.env);
   const existing = await db.select(IDEA_SELECT).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!existing) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
 
   const now = new Date().toISOString();
@@ -336,11 +330,10 @@ ideaRoutes.patch("/projects/:projectId/ideas/:ideaId", async (c) => {
 ideaRoutes.delete("/projects/:projectId/ideas/:ideaId", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: ideas.id }).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!existing) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   await db.delete(ideas).where(eq(ideas.id, ideaId));
   return c.json({ id: ideaId, deleted: true });
@@ -350,8 +343,7 @@ ideaRoutes.delete("/projects/:projectId/ideas/:ideaId", async (c) => {
 ideaRoutes.post("/projects/:projectId/ideas/:ideaId/evidence", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = z.object({
     knowledgeItemId: z.string().min(1),
     role: z.enum(["supports", "contradicts", "context"]).default("supports"),
@@ -360,9 +352,9 @@ ideaRoutes.post("/projects/:projectId/ideas/:ideaId/evidence", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_EVIDENCE", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const idea = await db.select({ id: ideas.id }).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
-  const item = await ownedKnowledgeInProject(db, projectId, accountId, parsed.data.knowledgeItemId);
+  const item = await ownedKnowledgeInProject(db, projectId, parsed.data.knowledgeItemId);
   if (!item) return c.json({ error: "KNOWLEDGE_NOT_FOUND", message: "知识对象不在当前项目中" }, 404);
   const existing = await db.select().from(ideaEvidence)
     .where(and(eq(ideaEvidence.ideaId, ideaId), eq(ideaEvidence.knowledgeItemId, parsed.data.knowledgeItemId))).get();
@@ -381,12 +373,11 @@ ideaRoutes.delete("/projects/:projectId/ideas/:ideaId/evidence/:evidenceId", asy
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
   const evidenceId = c.req.param("evidenceId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: ideaEvidence.id }).from(ideaEvidence)
     .innerJoin(ideas, eq(ideaEvidence.ideaId, ideas.id))
-    .where(and(eq(ideaEvidence.id, evidenceId), eq(ideaEvidence.ideaId, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideaEvidence.id, evidenceId), eq(ideaEvidence.ideaId, ideaId), eq(ideas.projectId, projectId))).get();
   if (!existing) return c.json({ error: "EVIDENCE_NOT_FOUND" }, 404);
   await db.delete(ideaEvidence).where(eq(ideaEvidence.id, evidenceId));
   return c.json({ id: evidenceId, deleted: true });
@@ -398,13 +389,12 @@ ideaRoutes.delete("/projects/:projectId/ideas/:ideaId/evidence/:evidenceId", asy
 ideaRoutes.post("/projects/:projectId/ideas/:ideaId/restore", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = z.object({ versionId: z.string().min(1) }).safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_RESTORE", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const idea = await db.select(IDEA_SELECT).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   const target = await db.select(VERSION_SELECT).from(ideaVersions)
     .where(and(eq(ideaVersions.id, parsed.data.versionId), eq(ideaVersions.ideaId, ideaId))).get();
@@ -424,20 +414,19 @@ ideaRoutes.post("/projects/:projectId/ideas/:ideaId/restore", async (c) => {
 ideaRoutes.post("/projects/:projectId/ideas/:ideaId/draft", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
   const db = createDatabase(c.env);
   const idea = await db.select(IDEA_SELECT).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   // 构 context:本条 idea 已挂的证据(优先)+ 本项目近期知识兜底,只读标题+内容(C9/C10)。
   const linked = await db.select({ title: knowledgeItems.title, kind: knowledgeItems.kind, content: knowledgeItems.content })
     .from(ideaEvidence).innerJoin(knowledgeItems, eq(ideaEvidence.knowledgeItemId, knowledgeItems.id))
     .where(eq(ideaEvidence.ideaId, ideaId));
   const fallback = linked.length > 0 ? [] : await db.select({ title: knowledgeItems.title, kind: knowledgeItems.kind, content: knowledgeItems.content })
-    .from(knowledgeItems).where(and(eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId)))
+    .from(knowledgeItems).where(and(eq(knowledgeItems.projectId, projectId)))
     .orderBy(desc(knowledgeItems.createdAt)).limit(20);
   const evidence = linked.length > 0 ? linked : fallback;
   const now = new Date().toISOString();
@@ -481,24 +470,23 @@ const regenerateSchema = z.object({
 ideaRoutes.post("/projects/:projectId/ideas/:ideaId/regenerate", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   // POST 体可选:空/null 体统一按 {} 处理(instruction 有 default),避免 null 触发 INVALID。
   const raw = await c.req.json().catch(() => ({}));
   const parsed = regenerateSchema.safeParse(raw ?? {});
   if (!parsed.success) return c.json({ error: "INVALID_REGENERATE", issues: parsed.error.issues }, 400);
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
   const db = createDatabase(c.env);
   const idea = await db.select(IDEA_SELECT).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   // 构 context:证据(同 draft,只读标题+内容 C9/C10)。
   const linked = await db.select({ title: knowledgeItems.title, kind: knowledgeItems.kind, content: knowledgeItems.content })
     .from(ideaEvidence).innerJoin(knowledgeItems, eq(ideaEvidence.knowledgeItemId, knowledgeItems.id))
     .where(eq(ideaEvidence.ideaId, ideaId));
   const fallback = linked.length > 0 ? [] : await db.select({ title: knowledgeItems.title, kind: knowledgeItems.kind, content: knowledgeItems.content })
-    .from(knowledgeItems).where(and(eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId)))
+    .from(knowledgeItems).where(and(eq(knowledgeItems.projectId, projectId)))
     .orderBy(desc(knowledgeItems.createdAt)).limit(20);
   const evidence = linked.length > 0 ? linked : fallback;
   const cur = await currentVersion(db, ideaId, idea.currentVersionId);

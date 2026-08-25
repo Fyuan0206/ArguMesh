@@ -20,7 +20,6 @@ import { EmptyState, ErrorState, LoadingState } from "../components/states";
 import {
   extractMatrix,
   getMatrixById,
-  getStoredAccessToken,
   updateEvidence,
   type EvidenceCell,
   type EvidenceStatus,
@@ -221,9 +220,7 @@ export function MatrixPage() {
       }).catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "打开 PDF 失败"));
       return;
     }
-    void fetch(`/api/papers/${encodeURIComponent(selectedPaper.id)}/file`, {
-      headers: { authorization: `Bearer ${getStoredAccessToken()}` },
-    })
+    void fetch(`/api/papers/${encodeURIComponent(selectedPaper.id)}/file`)
       .then(async (response) => {
         if (!response.ok) {
           let message = "打开 PDF 失败";

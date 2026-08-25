@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import app from "../../server/index";
-import { bearer, createTestContext, jsonHeaders, type TestContext } from "./helpers";
+import { createTestContext, jsonHeaders, type TestContext } from "./helpers";
 
 /**
  * 账户级 AI 配置(设置页表单):存取、密钥掩码、账户隔离、
@@ -53,13 +53,8 @@ afterAll(() => {
 });
 
 describe("AI 配置 API", () => {
-  it("未登录时 401", async () => {
-    const response = await app.request("http://localhost/api/ai/config", { headers: { "content-type": "application/json" } }, ctx.bindings);
-    expect(response.status).toBe(401);
-  });
-
   it("未配置时返回空配置", async () => {
-    const response = await app.request("http://localhost/api/ai/config", { headers: bearer(ctx.researcherToken) }, ctx.bindings);
+    const response = await app.request("http://localhost/api/ai/config", { }, ctx.bindings);
     expect(response.status).toBe(200);
     const payload = (await response.json()) as Record<string, unknown>;
     expect(payload).toMatchObject({ configured: false, baseUrl: "", model: "", apiKeyMasked: null });
@@ -71,7 +66,7 @@ describe("AI 配置 API", () => {
       "http://localhost/api/ai/config",
       {
         method: "PUT",
-        headers: jsonHeaders(ctx.adminToken),
+        headers: jsonHeaders(),
         body: JSON.stringify({ baseUrl: `${fakeUrl}/`, apiKey: "sk-test-abc1234567", model: "test-model-x" }),
       },
       ctx.bindings,
@@ -82,10 +77,10 @@ describe("AI 配置 API", () => {
     expect(JSON.stringify(payload)).not.toContain("sk-test-abc1234567");
   });
 
-  it("账户隔离:其他账户看不到该配置", async () => {
-    const response = await app.request("http://localhost/api/ai/config", { headers: bearer(ctx.researcherToken) }, ctx.bindings);
+  it("全局单配置:保存后 GET 返回同一份配置(无账户隔离概念)", async () => {
+    const response = await app.request("http://localhost/api/ai/config", { }, ctx.bindings);
     const payload = (await response.json()) as { configured: boolean; apiKeyMasked: string | null };
-    expect(payload).toMatchObject({ configured: false, apiKeyMasked: null });
+    expect(payload).toMatchObject({ configured: true, apiKeyMasked: "sk-…4567" });
   });
 
   it("AI 端点使用账户配置的 baseUrl/key/model,忽略客户端传来的 model", async () => {
@@ -94,7 +89,7 @@ describe("AI 配置 API", () => {
       "http://localhost/api/reader/translate",
       {
         method: "POST",
-        headers: jsonHeaders(ctx.adminToken),
+        headers: jsonHeaders(),
         body: translateBody({ model: "evil-model" }),
       },
       ctx.bindings,
@@ -108,7 +103,7 @@ describe("AI 配置 API", () => {
       "http://localhost/api/ai/config",
       {
         method: "PUT",
-        headers: jsonHeaders(ctx.adminToken),
+        headers: jsonHeaders(),
         body: JSON.stringify({ baseUrl: fakeUrl, apiKey: "", model: "test-model-x" }),
       },
       ctx.bindings,
@@ -118,18 +113,20 @@ describe("AI 配置 API", () => {
     expect(payload.apiKeyMasked).toBe("sk-…4567");
 
     received = null;
-    const translate = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(ctx.adminToken), body: translateBody() }, ctx.bindings);
+    const translate = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(), body: translateBody() }, ctx.bindings);
     expect(translate.status).toBe(200);
     const seen: ReceivedRequest | null = lastReceived();
     expect(seen?.authorization).toBe("Bearer sk-test-abc1234567");
   });
 
   it("首次保存缺 API Key → 400", async () => {
+    // 先清空,确保是「首次保存」语义(用例间共享同一测试库)。
+    await app.request("http://localhost/api/ai/config", { method: "DELETE" }, ctx.bindings);
     const response = await app.request(
       "http://localhost/api/ai/config",
       {
         method: "PUT",
-        headers: jsonHeaders(ctx.researcherToken),
+        headers: jsonHeaders(),
         body: JSON.stringify({ baseUrl: fakeUrl, apiKey: "", model: "test-model-x" }),
       },
       ctx.bindings,
@@ -144,7 +141,7 @@ describe("AI 配置 API", () => {
       "http://localhost/api/ai/config",
       {
         method: "PUT",
-        headers: jsonHeaders(ctx.adminToken),
+        headers: jsonHeaders(),
         body: JSON.stringify({ baseUrl: "not-a-url", apiKey: "sk-x", model: "m" }),
       },
       ctx.bindings,
@@ -153,12 +150,14 @@ describe("AI 配置 API", () => {
   });
 
   it("配置缺模型时 AI 端点明确报错(400)", async () => {
+    // 先清空,确保未保存过带模型的配置(用例间共享同一测试库)。
+    await app.request("http://localhost/api/ai/config", { method: "DELETE" }, ctx.bindings);
     await app.request(
       "http://localhost/api/ai/config",
-      { method: "PUT", headers: jsonHeaders(ctx.researcherToken), body: JSON.stringify({ baseUrl: fakeUrl, apiKey: "sk-researcher-key", model: "" }) },
+      { method: "PUT", headers: jsonHeaders(), body: JSON.stringify({ baseUrl: fakeUrl, apiKey: "sk-researcher-key", model: "" }) },
       ctx.bindings,
     );
-    const response = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(ctx.researcherToken), body: translateBody() }, ctx.bindings);
+    const response = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(), body: translateBody() }, ctx.bindings);
     expect(response.status).toBe(400);
     const payload = (await response.json()) as { error: string; message: string };
     expect(payload.error).toBe("AI_NOT_CONFIGURED");
@@ -166,8 +165,8 @@ describe("AI 配置 API", () => {
   });
 
   it("完全未配置时 AI 端点返回 400 提示去设置页", async () => {
-    await app.request("http://localhost/api/ai/config", { method: "DELETE", headers: bearer(ctx.researcherToken) }, ctx.bindings);
-    const response = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(ctx.researcherToken), body: translateBody() }, ctx.bindings);
+    await app.request("http://localhost/api/ai/config", { method: "DELETE" }, ctx.bindings);
+    const response = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(), body: translateBody() }, ctx.bindings);
     expect(response.status).toBe(400);
     const payload = (await response.json()) as { error: string; message: string };
     expect(payload.error).toBe("AI_NOT_CONFIGURED");
@@ -175,9 +174,9 @@ describe("AI 配置 API", () => {
   });
 
   it("清除配置后回到未配置状态", async () => {
-    const del = await app.request("http://localhost/api/ai/config", { method: "DELETE", headers: bearer(ctx.adminToken) }, ctx.bindings);
+    const del = await app.request("http://localhost/api/ai/config", { method: "DELETE" }, ctx.bindings);
     expect(del.status).toBe(200);
-    const get = await app.request("http://localhost/api/ai/config", { headers: bearer(ctx.adminToken) }, ctx.bindings);
+    const get = await app.request("http://localhost/api/ai/config", { }, ctx.bindings);
     const payload = (await get.json()) as { configured: boolean; apiKeyMasked: string | null };
     expect(payload).toMatchObject({ configured: false, apiKeyMasked: null });
   });
@@ -193,7 +192,7 @@ describe("AI 配置 API", () => {
     ctx.bindings.STEPFUN_MODEL = "env-model-x";
     try {
       received = null;
-      const response = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(ctx.researcherToken), body: translateBody() }, ctx.bindings);
+      const response = await app.request("http://localhost/api/reader/translate", { method: "POST", headers: jsonHeaders(), body: translateBody() }, ctx.bindings);
       expect(response.status).toBe(200);
       expect(lastReceived()).toMatchObject({ url: "/v1/chat/completions", authorization: "Bearer env-key-123", model: "env-model-x" });
     } finally {

@@ -3,12 +3,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
 import { aiSettings } from "../db/schema";
-import { getAiProviders } from "../services/ai";
+import { getAiProviders, LOCAL_AI_ACCOUNT_ID } from "../services/ai";
 import type { AppBindings, AppEnv } from "../types";
 
 /**
- * 账户级 AI 配置:设置页表单(Base URL / API Key / 模型名称)。
- * 按账户存 SQLite,优先于环境变量里的厂商配置;GET 永不回传完整密钥,只给掩码。
+ * 全局 AI 配置(单用户本地版):设置页表单(Base URL / API Key / 模型名称)。
+ * 单行表(固定 account_id="local"),优先于环境变量里的厂商配置;GET 永不回传完整密钥,只给掩码。
  */
 
 const saveSchema = z.object({
@@ -30,27 +30,30 @@ function configPayload(env: AppBindings, row: typeof aiSettings.$inferSelect | n
     baseUrl: row?.baseUrl ?? "",
     model: row?.model ?? "",
     apiKeyMasked: row ? maskApiKey(row.apiKey) : null,
-    // 环境变量里的厂商列表只作信息展示(未配置账户级配置时生效),不含密钥。
+    // 环境变量里的厂商列表只作信息展示(未配置全局配置时生效),不含密钥。
     envProviders: getAiProviders(env).map((p) => ({ id: p.id, label: p.label, models: p.models })),
   };
 }
 
+const LOCAL_ID = LOCAL_AI_ACCOUNT_ID;
+
 export const aiRoutes = new Hono<AppEnv>();
 
+/** GET /ai/config — 返回全局 AI 配置掩码(密钥永不回传)。 */
 aiRoutes.get("/ai/config", async (c) => {
   const db = createDatabase(c.env);
-  const row = await db.select().from(aiSettings).where(eq(aiSettings.accountId, c.get("accountId"))).get();
+  const row = await db.select().from(aiSettings).where(eq(aiSettings.accountId, LOCAL_ID)).get();
   return c.json(configPayload(c.env, row ?? null));
 });
 
+/** PUT /ai/config — 保存全局 AI 配置(apiKey 留空则保留已保存的密钥)。 */
 aiRoutes.put("/ai/config", async (c) => {
   const parsed = saveSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     return c.json({ error: "INVALID_AI_CONFIG", message: "AI 配置不完整:Base URL 需为 http(s) 地址", issues: parsed.error.issues }, 400);
   }
   const db = createDatabase(c.env);
-  const accountId = c.get("accountId");
-  const existing = await db.select().from(aiSettings).where(eq(aiSettings.accountId, accountId)).get();
+  const existing = await db.select().from(aiSettings).where(eq(aiSettings.accountId, LOCAL_ID)).get();
   const apiKey = parsed.data.apiKey || existing?.apiKey || "";
   if (!apiKey) {
     return c.json({ error: "INVALID_AI_CONFIG", message: "请输入 API Key" }, 400);
@@ -58,17 +61,18 @@ aiRoutes.put("/ai/config", async (c) => {
   const baseUrl = parsed.data.baseUrl.replace(/\/+$/, "");
   const model = parsed.data.model?.trim() || existing?.model || "";
   const now = new Date().toISOString();
-  if (existing) {
-    await db.update(aiSettings).set({ baseUrl, apiKey, model, updatedAt: now }).where(eq(aiSettings.accountId, accountId));
-  } else {
-    await db.insert(aiSettings).values({ accountId, baseUrl, apiKey, model, updatedAt: now });
-  }
-  const saved = await db.select().from(aiSettings).where(eq(aiSettings.accountId, accountId)).get();
+  // 单行表:有则更新,无则插入(accountId 用表默认值 "local")。
+  await db
+    .insert(aiSettings)
+    .values({ accountId: LOCAL_ID, baseUrl, apiKey, model, updatedAt: now })
+    .onConflictDoUpdate({ target: aiSettings.accountId, set: { baseUrl, apiKey, model, updatedAt: now } });
+  const saved = await db.select().from(aiSettings).where(eq(aiSettings.accountId, LOCAL_ID)).get();
   return c.json(configPayload(c.env, saved ?? null));
 });
 
+/** DELETE /ai/config — 清除全局 AI 配置(回退到环境变量厂商配置)。 */
 aiRoutes.delete("/ai/config", async (c) => {
   const db = createDatabase(c.env);
-  await db.delete(aiSettings).where(eq(aiSettings.accountId, c.get("accountId")));
+  await db.delete(aiSettings).where(eq(aiSettings.accountId, LOCAL_ID));
   return c.json({ cleared: true });
 });

@@ -7,7 +7,6 @@ import { resolveAiForRequest } from "../services/ai";
 import { createExtractionPlan } from "../services/stepfun";
 import { createStepFunCompletion } from "../services/stepfun";
 import type { AppEnv } from "../types";
-import { findOwnedMatrix } from "../auth/ownership";
 
 const requestSchema = z.object({
   maxCandidates: z.number().int().min(1).max(30).default(15),
@@ -52,10 +51,10 @@ extractionRoutes.post("/matrices/:matrixId/extract", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_EXTRACTION_INPUT", message: "PDF 文本或矩阵维度不完整", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const matrixId = c.req.param("matrixId");
-  if (!await findOwnedMatrix(c.env, c.get("accountId"), matrixId)) return c.json({ error: "MATRIX_NOT_FOUND", message: "矩阵不存在" }, 404);
+  if (!await db.select({ id: matrices.id }).from(matrices).where(eq(matrices.id, matrixId)).get()) return c.json({ error: "MATRIX_NOT_FOUND", message: "矩阵不存在" }, 404);
   const cells = await db.select().from(evidenceCells).where(and(eq(evidenceCells.matrixId, matrixId), eq(evidenceCells.locked, false)));
   if (!cells.length) return c.json({ status: "nothing_to_extract", updated: 0, message: "没有可提取的未锁定单元格" });
-  const resolution = await resolveAiForRequest(c.env, c.get("accountId"), {
+  const resolution = await resolveAiForRequest(c.env, {
     provider: parsed.data.provider?.trim() || undefined,
     model: parsed.data.model?.trim() || undefined,
   });
@@ -129,7 +128,7 @@ extractionRoutes.post("/projects/:projectId/extraction-plan", async (c) => {
 
   const db = createDatabase(c.env);
   const projectId = c.req.param("projectId");
-  const project = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.ownerId, c.get("accountId")))).get();
+  const project = await db.select().from(projects).where(eq(projects.id, projectId)).get();
   if (!project) {
     return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
   }
@@ -173,7 +172,7 @@ extractionRoutes.post("/projects/:projectId/extraction-plan", async (c) => {
     return c.json({ status: "nothing_to_plan", message: "当前没有待核验或冲突证据" });
   }
 
-  const resolution = await resolveAiForRequest(c.env, c.get("accountId"), {});
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) {
     return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
   }

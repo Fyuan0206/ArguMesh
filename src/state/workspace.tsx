@@ -268,7 +268,8 @@ interface WorkspaceContextValue extends WorkspaceData {
 }
 
 const LEGACY_STORAGE_KEY = "paperidea_workspace_v1";
-const storageKeyFor = (accountId: string) => `paperidea_workspace_v2_${accountId}`;
+// 单用户本地版:存储键固定,不再按账号分。
+const WORKSPACE_STORAGE_KEY = "paperidea_workspace_v2_local";
 const EMPTY_CANVAS: IdeaCanvas = { problem: "", gap: "", hypothesis: "", method: "", experiment: "", risks: "" };
 
 const initialData: WorkspaceData = {
@@ -340,17 +341,16 @@ function mergeRemoteProjects(localProjects: LocalProject[], remoteProjects: api.
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
-export function WorkspaceProvider({ accountId, children }: { accountId?: string; children: ReactNode }) {
-  const resolvedAccountId = accountId ?? "test-account";
-  const storageKey = storageKeyFor(resolvedAccountId);
-  const [data, setData] = useState<WorkspaceData>(() => readStoredData(storageKey, resolvedAccountId === "chen-fuyuan" || resolvedAccountId === "test-account"));
+export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const storageKey = WORKSPACE_STORAGE_KEY;
+  const [data, setData] = useState<WorkspaceData>(() => readStoredData(storageKey, true));
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(data));
   }, [data, storageKey]);
 
   useEffect(() => {
-    if (!api.getStoredAccessToken()) return;
+    // 单用户本地版:无鉴权,直接同步本地工作区与本地 API。
     let cancelled = false;
     api.listProjects(true).then(async ({ projects }) => {
       if (cancelled) return;

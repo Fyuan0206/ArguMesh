@@ -24,7 +24,7 @@ describe("POST /api/reader/ask (no AI configured)", () => {
   it("returns 400 with a clear message when AI is not configured", async () => {
     const response = await app.request(
       "http://localhost/api/reader/ask",
-      { method: "POST", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify(askBody) },
+      { method: "POST", headers: jsonHeaders(), body: JSON.stringify(askBody) },
       ctx.bindings,
     );
     expect(response.status).toBe(400);
@@ -38,18 +38,18 @@ describe("POST /api/reader/ask (no AI configured)", () => {
     // 先保存一份配置(指向不可达地址,请求快速失败),让请求通过配置解析、真正进入限流阶段。
     await app.request(
       "http://localhost/api/ai/config",
-      { method: "PUT", headers: jsonHeaders(ctx.researcherToken), body: JSON.stringify({ baseUrl: "http://127.0.0.1:1/v1", apiKey: "sk-rate-limit", model: "test-model" }) },
+      { method: "PUT", headers: jsonHeaders(), body: JSON.stringify({ baseUrl: "http://127.0.0.1:1/v1", apiKey: "sk-rate-limit", model: "test-model" }) },
       ctx.bindings,
     );
     const first = await app.request(
       "http://localhost/api/reader/ask",
-      { method: "POST", headers: jsonHeaders(ctx.researcherToken), body: JSON.stringify(askBody) },
+      { method: "POST", headers: jsonHeaders(), body: JSON.stringify(askBody) },
       ctx.bindings,
     );
     expect(first.status).toBe(502);
     const second = await app.request(
       "http://localhost/api/reader/ask",
-      { method: "POST", headers: jsonHeaders(ctx.researcherToken), body: JSON.stringify(askBody) },
+      { method: "POST", headers: jsonHeaders(), body: JSON.stringify(askBody) },
       ctx.bindings,
     );
     expect(second.status).toBe(429);
@@ -60,7 +60,7 @@ describe("POST /api/reader/ask (no AI configured)", () => {
   it("rejects empty selection without fullText with 400", async () => {
     const response = await app.request(
       "http://localhost/api/reader/ask",
-      { method: "POST", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ ...askBody, selection: "" }) },
+      { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ ...askBody, selection: "" }) },
       ctx.bindings,
     );
     expect(response.status).toBe(400);

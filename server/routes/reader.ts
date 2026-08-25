@@ -34,7 +34,7 @@ const translateSchema = z.object({
 readerRoutes.post("/reader/translate", async (c) => {
   const parsed = translateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_TRANSLATION", message: "请选择要翻译的原文" }, 400);
-  const resolution = await resolveAiForRequest(c.env, c.get("accountId"), {
+  const resolution = await resolveAiForRequest(c.env, {
     provider: parsed.data.provider?.trim() || undefined,
     model: parsed.data.model?.trim() || undefined,
   });
@@ -83,7 +83,7 @@ readerRoutes.post("/reader/ask", async (c) => {
     return c.json({ error: "INVALID_READER_QUESTION", message: "请选择原文，或稍后重试（全文提问需要先读取论文文本）。" }, 400);
   }
   // 先解析 AI 配置再限流:未配置时直接 400 提示,不消耗提问频次。
-  const resolution = await resolveAiForRequest(c.env, c.get("accountId"), {
+  const resolution = await resolveAiForRequest(c.env, {
     provider: parsed.data.provider?.trim() || undefined,
     model: parsed.data.model?.trim() || undefined,
   });

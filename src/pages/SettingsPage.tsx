@@ -1,12 +1,10 @@
-import { ArrowCounterClockwise, Check, Cpu, DownloadSimple, Eye, EyeSlash, Info, MagnifyingGlass, ShieldCheck, SignOut, Trash, UploadSimple, UserCircle } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, Cpu, DownloadSimple, Eye, EyeSlash, Info, MagnifyingGlass, ShieldCheck, Trash, UploadSimple, UserCircle } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { deleteAiConfig, getAiConfig, saveAiConfig, type AiConfig } from "../api";
-import { useAuth } from "../state/auth";
 import { useWorkspace } from "../state/workspace";
 
 export function SettingsPage() {
-  const auth = useAuth();
   const { settings, trash, updateSettings, resetLocalData, exportWorkspace, importWorkspace, restoreTrashItem, permanentlyDeleteTrashItem } = useWorkspace();
   const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState("");
@@ -150,8 +148,6 @@ export function SettingsPage() {
             {trashOpen ? <div className="settings-trash-items">{trash.length ? trash.map((item) => <article key={item.id}><span><strong>{item.label}</strong><small>{item.kind === "idea" ? "Idea" : "知识对象"} · {new Date(item.deletedAt).toLocaleString("zh-CN")}</small></span><span><button className="secondary-button" type="button" onClick={() => restoreTrashItem(item.id)}><ArrowCounterClockwise />恢复</button><button className="danger-button" type="button" onClick={() => permanentlyDeleteTrashItem(item.id)}><Trash />永久删除</button></span></article>) : <p>回收站为空。</p>}</div> : null}
             <div className="settings-security-row"><span><strong>恢复本地示例数据</strong></span><span className="settings-row-actions"><button className="danger-button" type="button" onClick={() => { if (window.confirm("确定恢复本地示例数据？你的本地页面修改将被清除。")) resetLocalData(); }}><Trash />恢复</button><button className="settings-info-button" type="button" onClick={() => toggleInfo("reset")} aria-label="查看数据恢复说明" aria-expanded={expandedInfo === "reset"}><Info /></button></span></div>
             {expandedInfo === "reset" ? <p className="settings-inline-info">此操作会清除当前浏览器中的本地修改，并恢复示例工作区。</p> : null}
-            <div className="settings-security-row"><span><strong>当前账号</strong><small>{auth.session?.displayName ?? "未登录"}</small></span><span className="settings-row-actions"><button className="danger-button" type="button" onClick={auth.signOut}><SignOut />退出登录</button><button className="settings-info-button" type="button" onClick={() => toggleInfo("session")} aria-label="查看会话说明" aria-expanded={expandedInfo === "session"}><Info /></button></span></div>
-            {expandedInfo === "session" ? <p className="settings-inline-info">会话令牌仅保存在当前标签页；关闭标签页后需要重新登录。</p> : null}
           </div>
           <input ref={inputRef} hidden type="file" accept="application/json,.json" onChange={(event) => void importBackup(event)} />
           {message ? <p className="settings-message">{message}</p> : null}

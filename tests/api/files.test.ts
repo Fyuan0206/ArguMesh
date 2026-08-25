@@ -2,7 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import app from "../../server/index";
-import { bearer, createTestContext, jsonHeaders, type TestContext } from "./helpers";
+import { createTestContext, jsonHeaders, type TestContext } from "./helpers";
 
 let ctx: TestContext;
 let pdf: Uint8Array;
@@ -15,12 +15,12 @@ beforeAll(async () => {
   for (const [projectId, paperId] of [["file-project", "file-paper-1"], ["file-project", "file-paper-2"]] as const) {
     await app.request(
       `http://localhost/api/projects/${projectId}`,
-      { method: "PUT", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ id: projectId, name: "文件测试项目" }) },
+      { method: "PUT", headers: jsonHeaders(), body: JSON.stringify({ id: projectId, name: "文件测试项目" }) },
       ctx.bindings,
     );
     await app.request(
       `http://localhost/api/projects/${projectId}/papers/${paperId}`,
-      { method: "PUT", headers: jsonHeaders(ctx.adminToken), body: JSON.stringify({ id: paperId, title: "文件测试论文", authors: "测试作者", venue: "测试会议", year: 2024 }) },
+      { method: "PUT", headers: jsonHeaders(), body: JSON.stringify({ id: paperId, title: "文件测试论文", authors: "测试作者", venue: "测试会议", year: 2024 }) },
       ctx.bindings,
     );
   }
@@ -36,7 +36,7 @@ describe("paper file upload (PDF in SQLite)", () => {
       "http://localhost/api/papers/file-paper-1/file",
       {
         method: "PUT",
-        headers: { ...bearer(ctx.adminToken), "content-type": "application/pdf", "content-length": String(pdf.byteLength) },
+        headers: { "content-type": "application/pdf", "content-length": String(pdf.byteLength) },
         body: pdf.buffer as ArrayBuffer,
       },
       ctx.bindings,
@@ -47,7 +47,7 @@ describe("paper file upload (PDF in SQLite)", () => {
 
     const download = await app.request(
       "http://localhost/api/papers/file-paper-1/file",
-      { headers: bearer(ctx.adminToken) },
+      { },
       ctx.bindings,
     );
     expect(download.status).toBe(200);
@@ -60,7 +60,7 @@ describe("paper file upload (PDF in SQLite)", () => {
   it("rejects non-PDF content types with 415", async () => {
     const response = await app.request(
       "http://localhost/api/papers/file-paper-1/file",
-      { method: "PUT", headers: { ...bearer(ctx.adminToken), "content-type": "text/plain" }, body: new TextEncoder().encode("not a pdf") },
+      { method: "PUT", headers: { "content-type": "text/plain" }, body: new TextEncoder().encode("not a pdf") },
       ctx.bindings,
     );
     expect(response.status).toBe(415);
@@ -69,20 +69,11 @@ describe("paper file upload (PDF in SQLite)", () => {
   it("returns 404 when the paper has no PDF", async () => {
     const response = await app.request(
       "http://localhost/api/papers/file-paper-2/file",
-      { headers: bearer(ctx.adminToken) },
+      { },
       ctx.bindings,
     );
     expect(response.status).toBe(404);
     const payload = (await response.json()) as { error?: string };
     expect(payload.error).toBe("FILE_NOT_FOUND");
-  });
-
-  it("returns 404 when the paper belongs to another account", async () => {
-    const response = await app.request(
-      "http://localhost/api/papers/file-paper-1/file",
-      { headers: bearer(ctx.researcherToken) },
-      ctx.bindings,
-    );
-    expect(response.status).toBe(404);
   });
 });

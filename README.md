@@ -9,9 +9,9 @@
 ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research workbench** for researchers, graduate students, and paper authors. It puts the whole research loop — define a topic → collect papers → read & annotate → compare evidence → form ideas → plan experiments — into one traceable workflow, so you stop shuffling information between PDF readers, spreadsheets, note apps, and chat AI.
 
 - **Zero cloud dependencies** — all data lives in a local SQLite file; no sign-ups, no vendor lock-in
-- **Works out of the box** — `pnpm install && pnpm run dev`, default admin `admin / admin123`
+- **Works out of the box** — `pnpm install && pnpm run dev`, no login required — open and start working
 - **Ask an AI to deploy it** — paste the prompt in [Deploy with AI](#deploy-with-ai) into Cursor, Claude Code, Codex, or Copilot
-- **Multi-user** — admins create member accounts; all data is isolated per account
+- **Single-user** — no login, no accounts; a local-first workbench that runs on one machine
 - **AI is optional** — plug in any OpenAI-compatible endpoint (OpenAI / DeepSeek / StepFun / local models); every manual workflow works without it
 
 > Note: the interface is currently in Chinese. 中文文档见 [README.zh-CN.md](./README.zh-CN.md)。
@@ -70,7 +70,7 @@ Notes, Claims, and Evidence in one place, linked to their papers and pages — t
 <img src="./docs/screenshots/knowledge.png" alt="Knowledge base — notes, claims, and evidence in one place" width="900" />
 
 ### Global search
-Search across projects from one box. Results stay scoped to your account.
+Search across projects from one box. Results stay in your local workspace.
 
 <img src="./docs/screenshots/search.png" alt="Global search across projects and literature" width="900" />
 
@@ -80,12 +80,8 @@ Every AI job (matrix extraction, PDF parsing…) shows its scope, model, progres
 <img src="./docs/screenshots/tasks.png" alt="Task center — AI job scope, progress, status, and results" width="900" />
 
 ### Accounts & isolation
-Admins manage member accounts (create, reset password, change role, delete — deleting cascades all their data). Every API call is scoped to the signed-in account; another account hitting the same resource ID gets 404. Passwords are stored as PBKDF2-SHA256; sessions are HMAC tokens kept in `sessionStorage`.
-
-<img src="./docs/screenshots/users.png" alt="User management — create accounts, assign roles, reset passwords, and remove users" width="900" />
-
 ### Bring your own AI
-Each account configures its own OpenAI-compatible endpoint in Settings — Base URL (default `https://api.openai.com/v1`), API Key, and model name. Keys are stored server-side and never returned to the browser. With no AI configured, every manual workflow still works; AI features return a clear "AI not configured" notice pointing at the settings page.
+You configure a single OpenAI-compatible endpoint in Settings — Base URL (default `https://api.openai.com/v1`), API Key, and model name. Keys are stored server-side and never returned to the browser. With no AI configured, every manual workflow still works; AI features return a clear "AI not configured" notice pointing at the settings page.
 
 <img src="./docs/screenshots/settings.png" alt="Settings — personal preferences, model provider, search tools, and local data controls" width="900" />
 
@@ -112,15 +108,15 @@ This is a local-first Node.js + SQLite app. Do not add Cloudflare Workers, wrang
 1. Prerequisites: Node.js ≥ 20. If pnpm is missing, run `corepack enable`.
 2. Read CLAUDE.md, README.md, and .env.example in the repo root.
 3. From the repo root, run `pnpm install`.
-4. `.env` is optional. Do not invent or commit API keys. Copy `.env.example` to `.env` only if the user wants to set DATABASE_URL, APP_ACCESS_TOKEN, or AI providers.
-5. Run `pnpm run db:seed` (idempotent: creates tables + default admin `admin` / `admin123` + a demo project).
+4. `.env` is optional. Do not invent or commit API keys. Copy `.env.example` to `.env` only if the user wants to set DATABASE_URL or AI providers.
+5. Run `pnpm run db:seed` (idempotent: creates tables + a demo project (no accounts)).
 6. Start the app:
    - Development (default): `pnpm run dev` → frontend http://localhost:5173 , API 127.0.0.1:8787
    - Single-port production-style: `pnpm run build` then `pnpm start` → http://127.0.0.1:8787
-7. Tell the user to open the URL, sign in with admin / admin123, and change the password after first login.
+7. Tell the user to open the URL and start working (no login required).
 
 On Windows PowerShell 5.x, chain commands with `;` not `&&`.
-Do not expose the server to the public internet unless the user explicitly asks. If they do: change the admin password, set APP_ACCESS_TOKEN in `.env`, and put HTTPS in front (Caddy / Nginx).
+Do not expose the server to the public internet unless the user explicitly asks — there is no authentication, so any network access is unrestricted.
 Do not start extra services. Confirm the app is up by hitting GET /api/health.
 ```
 
@@ -132,11 +128,11 @@ Requires Node.js ≥ 20 and pnpm.
 
 ```bash
 pnpm install
-pnpm run db:seed   # create local DB + default admin + demo project (safe to re-run)
+pnpm run db:seed   # create local DB + demo project (safe to re-run; no accounts)
 pnpm run dev       # dev mode: API on 127.0.0.1:8787, frontend on http://localhost:5173
 ```
 
-Open <http://localhost:5173> and sign in with `admin / admin123` — change the password after first login.
+Open <http://localhost:5173> and start working (no login required).
 
 Production (single port serving frontend + API):
 
@@ -148,24 +144,24 @@ pnpm start         # http://127.0.0.1:8787
 All configuration is optional — see `.env.example`:
 
 - `DATABASE_URL` — defaults to `file:./data/argumesh.db`; remote `libsql://` URLs also work
-- `AI_PROVIDERS` / `STEPFUN_*` — environment-level AI fallback (per-account settings take precedence)
-- `APP_ACCESS_TOKEN` — HMAC secret for session tokens; auto-generated into `data/session-secret.key` on first run, set it explicitly for any non-local deployment
+- `AI_PROVIDERS` / `STEPFUN_*` — environment-level AI fallback (the global settings take precedence)
+- (no auth — single-user local workbench; `APP_ACCESS_TOKEN` was removed)
 
-> ⚠️ By default ArguMesh listens on localhost only. For a public deployment: change the `admin` password, set `APP_ACCESS_TOKEN` explicitly, and put HTTPS in front (e.g. Caddy / Nginx).
+> ⚠️ By default ArguMesh listens on localhost only with **no authentication**. For a public deployment, restrict network access and put HTTPS in front (e.g. Caddy / Nginx) — there is no auth layer.
 
 ## Changelog
 
 ### v0.1 — Foundation research workbench
 - React 19 + Vite 6 frontend, Hono 4 (`@hono/node-server`) backend, local SQLite (libSQL `file:`) + Drizzle.
-- DB-backed accounts (PBKDF2-SHA256 passwords + HMAC sessions) with per-account data isolation.
+- Single-user: no accounts, no authentication, no data isolation layer.
 - Project → Literature (DOI / arXiv / URL import, batch PDF ≤ 25 MB, reading status) → Evidence Matrix (papers × dimensions, AI extraction + human verification with locking).
 - PDF reader (pdf.js + OCR), selection-based notes, Paper Card, global search, task center.
-- Migrations 0000–0006: projects / papers / paper_files / project_papers / matrices / matrix_papers / dimensions / evidence_cells / extraction_jobs / accounts / ai_settings.
+- Migrations 0000–0007 (0000-0006 core, 0007 research arc). The `accounts` table and `owner_id` columns were dropped in the 2026-08-25 single-user port (via `scripts/migrate-custom.ts`); `ai_settings` is now a single global row.
 
 ### v0.2 — AI-first reshape
 - Extracted the `server/ai/` AI capability layer (`completeJson` / `completeText` primitives + centralized prompts), slimming routes; unified Zod validation + provenance for all AI output.
-- Three-entry AI workbench: a Sidebar "AI assistant" trigger, a ProjectHome AI Hero, and a Cmd+K command palette (Research Agent launcher).
-- Per-account AI config (Settings page: Base URL / API Key / model; key server-side only), overriding the env fallback.
+- Three-entry AI workbench: a Sidebar "AI assistant" trigger, a ProjectHome AI Hero, and a Research Agent launcher (command palette opened via the sidebar button / hero form — not a keyboard shortcut).
+- Single global AI config (Settings page: Base URL / API Key / model; key server-side only), overriding the env fallback.
 - Reader AI (summarize / translate / ask) — submits only the selected text, page, and question (minimal exposure).
 - Workflow-style sidebar: main rail "Overview / Library / Matrix / Ideas" + "All projects", with downstream tools folded under "More".
 
@@ -174,11 +170,11 @@ All configuration is optional — see `.env.example`:
 - **Knowledge → Gap → Idea → Experiment** chain, each a first-class object with a state machine and provenance (`source` / `model` / `generatedAt`).
 - **Evidence Layers**: refine a quote through `raw → interpretation → implication`, with explicit user-triggered promotion into knowledge / gap / idea.
 - Migration `0007_last_deathbird` adds 13 research-arc tables. Run `pnpm run db:migrate` (or a fresh `db:seed`) to apply.
-- Admin cross-account data access (in the Cloudflare `prototype/` edition) is intentionally not part of this open-source edition.
+- (No admin/multi-account features — this is a single-user local workbench.)
 
 ## Data & backup
 
-- Database: `data/argumesh.db` (SQLite / libSQL) — projects, papers, evidence, accounts, and PDFs (BLOBs in `paper_files`, ≤ 25 MB per file)
+- Database: `data/argumesh.db` (SQLite / libSQL) — projects, papers, evidence, and PDFs (BLOBs in `paper_files`, ≤ 25 MB per file)
 - Backup: `pnpm run db:backup` exports a JSON snapshot to `backups/`; Settings also offers workspace JSON export/restore
 
 ## Tech stack
@@ -187,7 +183,7 @@ All configuration is optional — see `.env.example`:
 React 19 + TypeScript + Vite 6        frontend SPA
 Hono 4 + @hono/node-server            API (plain Node process, no cloud bindings)
 libSQL / SQLite + Drizzle ORM         all data (including PDFs) in one local file
-PBKDF2-SHA256 + HMAC session tokens   account system, no native dependencies
+(no auth)                                 single-user, no accounts, no native dependencies
 pdfjs-dist + tesseract.js             in-browser PDF rendering + OCR
 Any OpenAI-compatible API             AI extraction / reader Q&A / Paper Card (optional)
 ```
@@ -197,7 +193,7 @@ Any OpenAI-compatible API             AI extraction / reader Q&A / Paper Card (o
 ```
 src/               # React frontend (pages, components, state, PDF reader)
 server/            # Hono API (node.ts entry; routes/ by module)
-  auth/            # PBKDF2 password hashing + HMAC session tokens
+  auth/            # (removed in the single-user port — no auth)
   db/              # Drizzle schema + client (cached by connection URL)
   routes/          # auth / users / ai / projects / papers / library /
                    # matrix / files / extraction / card / reader

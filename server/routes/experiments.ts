@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { findOwnedProject } from "../auth/ownership";
+import { projectExists } from "../db/projects";
 import { createDatabase } from "../db/client";
 import { experimentResults, experiments, ideas, researchQuestions } from "../db/schema";
 import type { AppEnv } from "../types";
@@ -12,7 +12,7 @@ import type { AppEnv } from "../types";
  * - 状态机:planned → running → done | failed;done/failed 后写 conclusion。
  * - configJson / metricsJson / figuresJson 存 JSON 文本(结构化字段不建列)。
  * - provenance:source(human/ai)、model、generatedAt。
- * - 权限复用 findOwnedProject;ideaId/rqId 若传入须属本项目(可选挂载)。
+ * - ideaId/rqId 若传入须属本项目(可选挂载;单用户本地版,无账号归属)。
  */
 
 const EXP_STATUSES = ["planned", "running", "done", "failed"] as const;
@@ -183,8 +183,7 @@ export const experimentRoutes = new Hono<AppEnv>();
 /** POST /projects/:projectId/experiments — 创建一个实验(planned)。 */
 experimentRoutes.post("/projects/:projectId/experiments", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_EXPERIMENT", issues: parsed.error.issues }, 400);
   if (!(await ownedRefsInProject(c.env, projectId, parsed.data.ideaId, parsed.data.rqId))) {
@@ -194,7 +193,7 @@ experimentRoutes.post("/projects/:projectId/experiments", async (c) => {
   const id = crypto.randomUUID();
   const db = createDatabase(c.env);
   await db.insert(experiments).values({
-    id, ownerId: accountId, projectId,
+    id, projectId,
     ideaId: parsed.data.ideaId ?? null,
     rqId: parsed.data.rqId ?? null,
     title: parsed.data.title, hypothesis: parsed.data.hypothesis,
@@ -215,11 +214,10 @@ experimentRoutes.post("/projects/:projectId/experiments", async (c) => {
 /** GET /projects/:projectId/experiments — 列出本项目全部实验(每条附 append-only 结果)。 */
 experimentRoutes.get("/projects/:projectId/experiments", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const rows = await db.select(EXP_SELECT).from(experiments)
-    .where(and(eq(experiments.projectId, projectId), eq(experiments.ownerId, accountId)))
+    .where(and(eq(experiments.projectId, projectId)))
     .orderBy(desc(experiments.createdAt));
   const ids = rows.map((r) => r.id);
   const resultsByExp = new Map<string, ResultRow[]>();
@@ -240,11 +238,10 @@ experimentRoutes.get("/projects/:projectId/experiments", async (c) => {
 experimentRoutes.get("/projects/:projectId/experiments/:experimentId", async (c) => {
   const projectId = c.req.param("projectId");
   const experimentId = c.req.param("experimentId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const row = await db.select(EXP_SELECT).from(experiments)
-    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId), eq(experiments.ownerId, accountId))).get();
+    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId))).get();
   if (!row) return c.json({ error: "EXPERIMENT_NOT_FOUND", message: "实验不存在" }, 404);
   const results = await loadResults(c.env, experimentId);
   return c.json({ experiment: toExp(row, results) });
@@ -254,15 +251,14 @@ experimentRoutes.get("/projects/:projectId/experiments/:experimentId", async (c)
 experimentRoutes.patch("/projects/:projectId/experiments/:experimentId", async (c) => {
   const projectId = c.req.param("projectId");
   const experimentId = c.req.param("experimentId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = patchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_EXPERIMENT_PATCH", issues: parsed.error.issues }, 400);
   if (Object.keys(parsed.data).length === 0) return c.json({ error: "EMPTY_PATCH", message: "没有要修改的内容" }, 400);
 
   const db = createDatabase(c.env);
   const existing = await db.select(EXP_SELECT).from(experiments)
-    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId), eq(experiments.ownerId, accountId))).get();
+    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId))).get();
   if (!existing) return c.json({ error: "EXPERIMENT_NOT_FOUND", message: "实验不存在" }, 404);
 
   if (parsed.data.status && parsed.data.status !== existing.status && !canTransition(existing.status, parsed.data.status)) {
@@ -288,11 +284,10 @@ experimentRoutes.patch("/projects/:projectId/experiments/:experimentId", async (
 experimentRoutes.delete("/projects/:projectId/experiments/:experimentId", async (c) => {
   const projectId = c.req.param("projectId");
   const experimentId = c.req.param("experimentId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: experiments.id }).from(experiments)
-    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId), eq(experiments.ownerId, accountId))).get();
+    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId))).get();
   if (!existing) return c.json({ error: "EXPERIMENT_NOT_FOUND", message: "实验不存在" }, 404);
   await db.delete(experiments).where(eq(experiments.id, experimentId));
   return c.json({ id: experimentId, deleted: true });
@@ -302,8 +297,7 @@ experimentRoutes.delete("/projects/:projectId/experiments/:experimentId", async 
 experimentRoutes.post("/projects/:projectId/experiments/:experimentId/results", async (c) => {
   const projectId = c.req.param("projectId");
   const experimentId = c.req.param("experimentId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = z.object({
     metrics: z.record(z.string().max(200), z.unknown()).default({}),
     figures: z.array(z.unknown()).max(100).default([]),
@@ -312,7 +306,7 @@ experimentRoutes.post("/projects/:projectId/experiments/:experimentId/results", 
   if (!parsed.success) return c.json({ error: "INVALID_RESULT", issues: parsed.error.issues }, 400);
   const db = createDatabase(c.env);
   const exp = await db.select({ id: experiments.id }).from(experiments)
-    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId), eq(experiments.ownerId, accountId))).get();
+    .where(and(eq(experiments.id, experimentId), eq(experiments.projectId, projectId))).get();
   if (!exp) return c.json({ error: "EXPERIMENT_NOT_FOUND", message: "实验不存在" }, 404);
 
   // runNo = 当前已有结果数 + 1(append-only,与唯一索引 (experimentId, runNo) 一致)。
@@ -336,12 +330,11 @@ experimentRoutes.delete("/projects/:projectId/experiments/:experimentId/results/
   const projectId = c.req.param("projectId");
   const experimentId = c.req.param("experimentId");
   const resultId = c.req.param("resultId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: experimentResults.id }).from(experimentResults)
     .innerJoin(experiments, eq(experimentResults.experimentId, experiments.id))
-    .where(and(eq(experimentResults.id, resultId), eq(experimentResults.experimentId, experimentId), eq(experiments.projectId, projectId), eq(experiments.ownerId, accountId))).get();
+    .where(and(eq(experimentResults.id, resultId), eq(experimentResults.experimentId, experimentId), eq(experiments.projectId, projectId))).get();
   if (!existing) return c.json({ error: "RESULT_NOT_FOUND", message: "结果不存在" }, 404);
   await db.delete(experimentResults).where(eq(experimentResults.id, resultId));
   return c.json({ id: resultId, deleted: true });

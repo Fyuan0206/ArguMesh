@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
 import { knowledgeItems, knowledgeRelations, papers, projectPapers, projects } from "../db/schema";
-import { findOwnedProject } from "../auth/ownership";
+import { projectExists } from "../db/projects";
 import { resolveAiForRequest } from "../services/ai";
 import { analyzeKnowledge, extractKnowledge } from "../ai/capabilities";
 
@@ -14,7 +14,7 @@ import type { AppEnv } from "../types";
  * 并承载 AI 提炼。provenance 是硬约束:quote(原文)与 content(提炼)分离,带 page/source/model/generatedAt。
  * - AI 提炼由后端直接插 draft,前端无法伪造来源(C4)。
  * - 后端不读 PDF 全文,只收 quote+page+paperId(最小暴露 C10,与 reader/card 一致)。
- * - 权限复用 findOwnedProject(project ownership);paperId 需属于本项目。
+ * - paperId 需属于本项目(单用户本地版,无账号归属)。
  */
 
 /** 数据库行 → 前端 KnowledgeItem 形状。 */
@@ -94,8 +94,8 @@ const patchSchema = z.object({
 
 export const knowledgeRoutes = new Hono<AppEnv>();
 
-/** 校验 paperId 属于本项目且当前账号可访问,返回论文标题(用于 AI 上下文)或 null。 */
-async function findProjectPaper(env: AppEnv["Bindings"], projectId: string, accountId: string, paperId: string) {
+/** 校验 paperId 属于本项目,返回论文标题(用于 AI 上下文)或 null。 */
+async function findProjectPaper(env: AppEnv["Bindings"], projectId: string, paperId: string) {
   const db = createDatabase(env);
   const row = await db
     .select({ title: papers.title })
@@ -122,16 +122,15 @@ knowledgeRoutes.post("/projects/:projectId/knowledge", async (c) => {
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_KNOWLEDGE_REQUEST", issues: parsed.error.issues }, 400);
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
-  if (!(await findProjectPaper(c.env, projectId, accountId, parsed.data.paperId))) {
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
+  if (!(await findProjectPaper(c.env, projectId, parsed.data.paperId))) {
     return c.json({ error: "PAPER_NOT_IN_PROJECT", message: "论文不在当前项目中" }, 404);
   }
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const db = createDatabase(c.env);
   await db.insert(knowledgeItems).values({
-    id, ownerId: accountId, projectId, paperId: parsed.data.paperId,
+    id, projectId, paperId: parsed.data.paperId,
     kind: parsed.data.kind, title: parsed.data.title, content: parsed.data.content,
     quote: parsed.data.quote, note: parsed.data.note, page: parsed.data.page, location: null,
     source: "human", status: parsed.data.status, model: null, generatedAt: null, createdAt: now, updatedAt: now,
@@ -151,13 +150,12 @@ knowledgeRoutes.post("/projects/:projectId/knowledge/extract", async (c) => {
     return c.json({ error: "INVALID_EXTRACT_REQUEST", message: "请先选择至少 10 个字符的原文", issues: parsed.error.issues }, 400);
   }
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  const project = await findOwnedProject(c.env, accountId, projectId);
+  const project = await projectExists(c.env, projectId);
   if (!project) return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
-  const paper = await findProjectPaper(c.env, projectId, accountId, parsed.data.paperId);
+  const paper = await findProjectPaper(c.env, projectId, parsed.data.paperId);
   if (!paper) return c.json({ error: "PAPER_NOT_IN_PROJECT", message: "论文不在当前项目中" }, 404);
 
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
 
   const db = createDatabase(c.env);
@@ -192,7 +190,6 @@ knowledgeRoutes.post("/projects/:projectId/knowledge/extract", async (c) => {
     };
     await db.insert(knowledgeItems).values({
       id: row.id,
-      ownerId: accountId,
       projectId: row.projectId,
       paperId: row.paperId,
       kind: row.kind,
@@ -224,14 +221,13 @@ knowledgeRoutes.post("/projects/:projectId/knowledge/extract", async (c) => {
  *  prompt/schema 已收敛到 analyzeKnowledge(capability);validIds 幻觉过滤留 route(capability 不碰 DB)。 */
 knowledgeRoutes.post("/projects/:projectId/knowledge/analyze", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
   const db = createDatabase(c.env);
   // 构 context:本项目全部知识对象(C9),只读 id/title/content/kind,不读 PDF(C10)。
   const items = await db.select({ id: knowledgeItems.id, kind: knowledgeItems.kind, title: knowledgeItems.title, content: knowledgeItems.content })
-    .from(knowledgeItems).where(and(eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId)))
+    .from(knowledgeItems).where(and(eq(knowledgeItems.projectId, projectId)))
     .orderBy(desc(knowledgeItems.createdAt)).limit(120);
   if (items.length === 0) return c.json({ error: "NO_KNOWLEDGE", message: "本项目还没有知识对象,无法做情报分析。先在阅读器 AI 提炼几条知识。" }, 400);
   // AI 能力已收敛到 analyzeKnowledge(capability);返回原始 out,validIds 幻觉过滤留 route(capability 不碰 DB)。
@@ -262,14 +258,13 @@ knowledgeRoutes.post("/projects/:projectId/knowledge/analyze", async (c) => {
 
 knowledgeRoutes.get("/projects/:projectId/knowledge", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  const project = await findOwnedProject(c.env, accountId, projectId);
+  const project = await projectExists(c.env, projectId);
   if (!project) return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
   const db = createDatabase(c.env);
   const rows = await db
     .select(SELECT_COLUMNS)
     .from(knowledgeItems)
-    .where(and(eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId)))
+    .where(and(eq(knowledgeItems.projectId, projectId)))
     .orderBy(desc(knowledgeItems.createdAt));
   return c.json({ items: rows.map(toKnowledgeItem) });
 });
@@ -278,8 +273,7 @@ knowledgeRoutes.get("/projects/:projectId/knowledge", async (c) => {
 knowledgeRoutes.patch("/projects/:projectId/knowledge/:knowledgeId", async (c) => {
   const projectId = c.req.param("projectId");
   const knowledgeId = c.req.param("knowledgeId");
-  const accountId = c.get("accountId");
-  const project = await findOwnedProject(c.env, accountId, projectId);
+  const project = await projectExists(c.env, projectId);
   if (!project) return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
   const parsed = patchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_KNOWLEDGE_PATCH", issues: parsed.error.issues }, 400);
@@ -289,7 +283,7 @@ knowledgeRoutes.patch("/projects/:projectId/knowledge/:knowledgeId", async (c) =
   const existing = await db
     .select(SELECT_COLUMNS)
     .from(knowledgeItems)
-    .where(and(eq(knowledgeItems.id, knowledgeId), eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId)))
+    .where(and(eq(knowledgeItems.id, knowledgeId), eq(knowledgeItems.projectId, projectId)))
     .get();
   if (!existing) return c.json({ error: "KNOWLEDGE_NOT_FOUND", message: "知识对象不存在" }, 404);
 
@@ -306,14 +300,13 @@ knowledgeRoutes.patch("/projects/:projectId/knowledge/:knowledgeId", async (c) =
 knowledgeRoutes.delete("/projects/:projectId/knowledge/:knowledgeId", async (c) => {
   const projectId = c.req.param("projectId");
   const knowledgeId = c.req.param("knowledgeId");
-  const accountId = c.get("accountId");
-  const project = await findOwnedProject(c.env, accountId, projectId);
+  const project = await projectExists(c.env, projectId);
   if (!project) return c.json({ error: "PROJECT_NOT_FOUND", message: "项目不存在" }, 404);
   const db = createDatabase(c.env);
   const existing = await db
     .select({ id: knowledgeItems.id })
     .from(knowledgeItems)
-    .where(and(eq(knowledgeItems.id, knowledgeId), eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId)))
+    .where(and(eq(knowledgeItems.id, knowledgeId), eq(knowledgeItems.projectId, projectId)))
     .get();
   if (!existing) return c.json({ error: "KNOWLEDGE_NOT_FOUND", message: "知识对象不存在" }, 404);
   await db.delete(knowledgeItems).where(eq(knowledgeItems.id, knowledgeId));
@@ -350,11 +343,10 @@ function toRelation(r: RelationRow) {
   return { id: r.id, itemIdA: r.sourceId, itemIdB: r.targetId, type: r.type, note: r.note, createdAt: r.createdAt };
 }
 
-/** 校验两端知识对象都归属本项目+本账号;返回 true 通过。 */
+/** 校验两端知识对象都归属本项目;返回 true 通过。 */
 async function bothItemsOwned(
   env: AppEnv["Bindings"],
   projectId: string,
-  accountId: string,
   a: string,
   b: string,
 ): Promise<boolean> {
@@ -362,24 +354,19 @@ async function bothItemsOwned(
   const rows = await db
     .select({ id: knowledgeItems.id })
     .from(knowledgeItems)
-    .where(and(
-      eq(knowledgeItems.projectId, projectId),
-      eq(knowledgeItems.ownerId, accountId),
-      inArray(knowledgeItems.id, [a, b]),
-    ));
+    .where(and(eq(knowledgeItems.projectId, projectId), inArray(knowledgeItems.id, [a, b])));
   return rows.length === 2;
 }
 
 /** POST /projects/:projectId/knowledge/relations — 创建或复得一条关系(幂等)。 */
 knowledgeRoutes.post("/projects/:projectId/knowledge/relations", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = relationBodySchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_RELATION", issues: parsed.error.issues }, 400);
   const { itemIdA, itemIdB, type } = parsed.data;
   if (itemIdA === itemIdB) return c.json({ error: "SELF_RELATION", message: "不能与自身建立关系" }, 400);
-  if (!(await bothItemsOwned(c.env, projectId, accountId, itemIdA, itemIdB))) {
+  if (!(await bothItemsOwned(c.env, projectId, itemIdA, itemIdB))) {
     return c.json({ error: "KNOWLEDGE_NOT_FOUND", message: "知识对象不在当前项目中" }, 404);
   }
   const [sourceId, targetId] = canonicalPair(itemIdA, itemIdB);
@@ -402,20 +389,19 @@ knowledgeRoutes.post("/projects/:projectId/knowledge/relations", async (c) => {
     note: parsed.data.note ?? "",
     createdAt: now,
   };
-  await db.insert(knowledgeRelations).values({ id, ownerId: accountId, projectId, sourceId, targetId, type, note: row.note, createdAt: now });
+  await db.insert(knowledgeRelations).values({ id, projectId, sourceId, targetId, type, note: row.note, createdAt: now });
   return c.json({ relation: toRelation(row) }, 201);
 });
 
 /** GET /projects/:projectId/knowledge/relations — 列出本项目的关系(含两端标题,后端 enrichment)。 */
 knowledgeRoutes.get("/projects/:projectId/knowledge/relations", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const relations = await db
     .select()
     .from(knowledgeRelations)
-    .where(and(eq(knowledgeRelations.projectId, projectId), eq(knowledgeRelations.ownerId, accountId)))
+    .where(and(eq(knowledgeRelations.projectId, projectId)))
     .orderBy(desc(knowledgeRelations.createdAt));
   const ids = Array.from(new Set(relations.flatMap((r) => [r.sourceId, r.targetId])));
   const titles = new Map<string, string>();
@@ -440,13 +426,12 @@ knowledgeRoutes.get("/projects/:projectId/knowledge/relations", async (c) => {
 knowledgeRoutes.delete("/projects/:projectId/knowledge/relations/:relationId", async (c) => {
   const projectId = c.req.param("projectId");
   const relationId = c.req.param("relationId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db
     .select({ id: knowledgeRelations.id })
     .from(knowledgeRelations)
-    .where(and(eq(knowledgeRelations.id, relationId), eq(knowledgeRelations.projectId, projectId), eq(knowledgeRelations.ownerId, accountId)))
+    .where(and(eq(knowledgeRelations.id, relationId), eq(knowledgeRelations.projectId, projectId)))
     .get();
   if (!existing) return c.json({ error: "RELATION_NOT_FOUND" }, 404);
   await db.delete(knowledgeRelations).where(eq(knowledgeRelations.id, relationId));

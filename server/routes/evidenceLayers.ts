@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { findOwnedProject } from "../auth/ownership";
+import { projectExists } from "../db/projects";
 import { createDatabase } from "../db/client";
 import { evidenceLayers, gaps, ideaVersions, ideas, knowledgeItems, projectPapers } from "../db/schema";
 import type { Context } from "hono";
@@ -14,7 +14,7 @@ import type { AppEnv } from "../types";
  *   raw(quote 原文) → interpretation(理解) → implication(研究启发/可检验假设) 三层。
  * - AI 只能生成 interpretation / implication,且一律落 draft;confirmed 必须经 PATCH 人工确认(对齐 "AI vs human 分离")。
  * - parentId 是纯 text 列(非 FK),悬挂引用由本文件归属校验防住。
- * - 权限复用 findOwnedProject;knowledgeItemId / parentId / paperId 都校验属本项目+本账号。
+ * - knowledgeItemId / parentId / paperId 都校验属本项目(单用户本地版,无账号归属)。
  * - provenance:source(human/ai)、model、generatedAt。
  */
 
@@ -109,19 +109,19 @@ async function paperInProject(env: AppEnv["Bindings"], projectId: string, paperI
   return Boolean(row);
 }
 
-/** 校验 knowledgeItemId 属本项目+本账号(可选挂载)。 */
-async function knowledgeInProject(env: AppEnv["Bindings"], projectId: string, accountId: string, knowledgeItemId: string): Promise<boolean> {
+/** 校验 knowledgeItemId 属本项目(可选挂载)。 */
+async function knowledgeInProject(env: AppEnv["Bindings"], projectId: string, knowledgeItemId: string): Promise<boolean> {
   const db = createDatabase(env);
   const row = await db.select({ id: knowledgeItems.id }).from(knowledgeItems)
-    .where(and(eq(knowledgeItems.id, knowledgeItemId), eq(knowledgeItems.projectId, projectId), eq(knowledgeItems.ownerId, accountId))).get();
+    .where(and(eq(knowledgeItems.id, knowledgeItemId), eq(knowledgeItems.projectId, projectId))).get();
   return Boolean(row);
 }
 
-/** 校验 parentId 属本项目+本账号(防悬挂引用)。返回父层行(用于 AI interpret/imply 读上下文)。 */
-async function ownedParent(env: AppEnv["Bindings"], projectId: string, accountId: string, parentId: string): Promise<LayerRow | null> {
+/** 校验 parentId 属本项目(防悬挂引用)。返回父层行(用于 AI interpret/imply 读上下文)。 */
+async function ownedParent(env: AppEnv["Bindings"], projectId: string, parentId: string): Promise<LayerRow | null> {
   const db = createDatabase(env);
   const row = await db.select(LAYER_SELECT).from(evidenceLayers)
-    .where(and(eq(evidenceLayers.id, parentId), eq(evidenceLayers.projectId, projectId), eq(evidenceLayers.ownerId, accountId))).get();
+    .where(and(eq(evidenceLayers.id, parentId), eq(evidenceLayers.projectId, projectId))).get();
   return (row as LayerRow | null) ?? null;
 }
 
@@ -156,12 +156,11 @@ export const evidenceLayerRoutes = new Hono<AppEnv>();
 /** GET /projects/:projectId/evidence-layers?paperId=&knowledgeItemId= — 列出层(可按论文/知识对象过滤)。 */
 evidenceLayerRoutes.get("/projects/:projectId/evidence-layers", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const paperId = c.req.query("paperId");
   const knowledgeItemId = c.req.query("knowledgeItemId");
   const db = createDatabase(c.env);
-  const clauses = [eq(evidenceLayers.projectId, projectId), eq(evidenceLayers.ownerId, accountId)];
+  const clauses = [eq(evidenceLayers.projectId, projectId)];
   if (paperId) clauses.push(eq(evidenceLayers.paperId, paperId));
   if (knowledgeItemId) clauses.push(eq(evidenceLayers.knowledgeItemId, knowledgeItemId));
   const rows = await db.select(LAYER_SELECT).from(evidenceLayers).where(and(...clauses)).orderBy(desc(evidenceLayers.createdAt));
@@ -171,23 +170,22 @@ evidenceLayerRoutes.get("/projects/:projectId/evidence-layers", async (c) => {
 /** POST /projects/:projectId/evidence-layers — 人工创建一层(raw/interpretation/implication)。人工创建一律 confirmed。 */
 evidenceLayerRoutes.post("/projects/:projectId/evidence-layers", async (c) => {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_LAYER", issues: parsed.error.issues }, 400);
   if (!(await paperInProject(c.env, projectId, parsed.data.paperId))) return c.json({ error: "PAPER_NOT_IN_PROJECT", message: "论文不在当前项目中" }, 404);
-  if (parsed.data.knowledgeItemId && !(await knowledgeInProject(c.env, projectId, accountId, parsed.data.knowledgeItemId))) {
+  if (parsed.data.knowledgeItemId && !(await knowledgeInProject(c.env, projectId, parsed.data.knowledgeItemId))) {
     return c.json({ error: "KNOWLEDGE_NOT_FOUND", message: "知识对象不在当前项目中" }, 404);
   }
   if (parsed.data.parentId) {
-    const parent = await ownedParent(c.env, projectId, accountId, parsed.data.parentId);
+    const parent = await ownedParent(c.env, projectId, parsed.data.parentId);
     if (!parent) return c.json({ error: "PARENT_NOT_FOUND", message: "父层不存在或无权访问" }, 404);
   }
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const db = createDatabase(c.env);
   await db.insert(evidenceLayers).values({
-    id, ownerId: accountId, projectId,
+    id, projectId,
     paperId: parsed.data.paperId,
     knowledgeItemId: parsed.data.knowledgeItemId ?? null,
     parentId: parsed.data.parentId ?? null,
@@ -214,14 +212,13 @@ evidenceLayerRoutes.post("/projects/:projectId/evidence-layers", async (c) => {
 evidenceLayerRoutes.patch("/projects/:projectId/evidence-layers/:layerId", async (c) => {
   const projectId = c.req.param("projectId");
   const layerId = c.req.param("layerId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = patchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_LAYER_PATCH", issues: parsed.error.issues }, 400);
   if (Object.keys(parsed.data).length === 0) return c.json({ error: "EMPTY_PATCH", message: "没有要修改的内容" }, 400);
   const db = createDatabase(c.env);
   const existing = await db.select(LAYER_SELECT).from(evidenceLayers)
-    .where(and(eq(evidenceLayers.id, layerId), eq(evidenceLayers.projectId, projectId), eq(evidenceLayers.ownerId, accountId))).get();
+    .where(and(eq(evidenceLayers.id, layerId), eq(evidenceLayers.projectId, projectId))).get();
   if (!existing) return c.json({ error: "LAYER_NOT_FOUND", message: "证据层不存在" }, 404);
   const now = new Date().toISOString();
   await db.update(evidenceLayers).set({ ...parsed.data, updatedAt: now }).where(eq(evidenceLayers.id, layerId));
@@ -232,11 +229,10 @@ evidenceLayerRoutes.patch("/projects/:projectId/evidence-layers/:layerId", async
 evidenceLayerRoutes.delete("/projects/:projectId/evidence-layers/:layerId", async (c) => {
   const projectId = c.req.param("projectId");
   const layerId = c.req.param("layerId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: evidenceLayers.id }).from(evidenceLayers)
-    .where(and(eq(evidenceLayers.id, layerId), eq(evidenceLayers.projectId, projectId), eq(evidenceLayers.ownerId, accountId))).get();
+    .where(and(eq(evidenceLayers.id, layerId), eq(evidenceLayers.projectId, projectId))).get();
   if (!existing) return c.json({ error: "LAYER_NOT_FOUND", message: "证据层不存在" }, 404);
   await db.delete(evidenceLayers).where(eq(evidenceLayers.id, layerId));
   return c.json({ id: layerId, deleted: true });
@@ -252,8 +248,7 @@ async function aiGenerateLayer(
   field: "interpretation" | "implication",
 ) {
   const projectId = c.req.param("projectId");
-  const accountId = c.get("accountId");
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
 
   const userContent = JSON.stringify({
@@ -290,7 +285,7 @@ async function aiGenerateLayer(
     const quote = parent.quote || parent.content;
     // AI 生成的层一律 draft + source:ai,前端无法伪造 confirmed(对齐 "AI vs human 分离")。
     await db.insert(evidenceLayers).values({
-      id, ownerId: accountId, projectId, paperId: parent.paperId,
+      id, projectId, paperId: parent.paperId,
       knowledgeItemId: parent.knowledgeItemId, parentId: parent.id, level: targetLevel,
       content, quote, page: parent.page, location: parent.location,
       status: "draft", source: "ai", model: resolution.model, generatedAt: now,
@@ -313,9 +308,8 @@ async function aiGenerateLayer(
 evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/interpret", async (c) => {
   const projectId = c.req.param("projectId");
   const layerId = c.req.param("layerId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
-  const parent = await ownedParent(c.env, projectId, accountId, layerId);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  const parent = await ownedParent(c.env, projectId, layerId);
   if (!parent) return c.json({ error: "LAYER_NOT_FOUND", message: "证据层不存在" }, 404);
   return aiGenerateLayer(c, parent, "interpretation", INTERPRET_PROMPT, INTERPRET_SCHEMA, "interpretation");
 });
@@ -324,9 +318,8 @@ evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/interpre
 evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/imply", async (c) => {
   const projectId = c.req.param("projectId");
   const layerId = c.req.param("layerId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
-  const parent = await ownedParent(c.env, projectId, accountId, layerId);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  const parent = await ownedParent(c.env, projectId, layerId);
   if (!parent) return c.json({ error: "LAYER_NOT_FOUND", message: "证据层不存在" }, 404);
   return aiGenerateLayer(c, parent, "implication", IMPLY_PROMPT, IMPLY_SCHEMA, "implication");
 });
@@ -338,21 +331,20 @@ const promoteSchema = z.object({
   title: z.string().max(200).optional(),
 });
 
-/** 载入一层并校验(存在 + 归属 + 已 confirmed)。成功返回 {row, accountId};失败返回错误描述符(由路由发响应)。 */
+/** 载入一层并校验(存在 + 已 confirmed)。成功返回 {row};失败返回错误描述符(由路由发响应)。 */
 async function loadConfirmedLayer(
   c: Context<AppEnv>,
   projectId: string,
   layerId: string,
-): Promise<{ ok: true; row: LayerRow; accountId: string } | { ok: false; error: string; message: string; status: 400 | 404 | 409 }> {
-  const accountId = c.get("accountId");
+): Promise<{ ok: true; row: LayerRow } | { ok: false; error: string; message: string; status: 400 | 404 | 409 }> {
   const db = createDatabase(c.env);
   const row = await db.select(LAYER_SELECT).from(evidenceLayers)
-    .where(and(eq(evidenceLayers.id, layerId), eq(evidenceLayers.projectId, projectId), eq(evidenceLayers.ownerId, accountId))).get();
+    .where(and(eq(evidenceLayers.id, layerId), eq(evidenceLayers.projectId, projectId))).get();
   if (!row) return { ok: false, error: "LAYER_NOT_FOUND", message: "证据层不存在", status: 404 };
   const r = row as LayerRow;
   if (r.status !== "confirmed") return { ok: false, error: "LAYER_NOT_CONFIRMED", message: "只有已确认的层才能晋升,请先确认。", status: 400 };
   if (r.promotedTo) return { ok: false, error: "ALREADY_PROMOTED", message: "该层已晋升过,避免重复。", status: 409 };
-  return { ok: true, row: r, accountId };
+  return { ok: true, row: r };
 }
 
 /** 把层里往上找到 raw 层的 quote(晋升沿袭最根的原文依据)。 */
@@ -372,8 +364,7 @@ function rootQuote(layer: LayerRow, allLayers: LayerRow[]): string {
 evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/promote", async (c) => {
   const projectId = c.req.param("projectId");
   const layerId = c.req.param("layerId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = promoteSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_PROMOTE_REQUEST", issues: parsed.error.issues }, 400);
   const ctx = await loadConfirmedLayer(c, projectId, layerId);
@@ -382,7 +373,7 @@ evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/promote"
   const db = createDatabase(c.env);
   // 读同项目全部层以找到 root quote
   const allLayers = (await db.select(LAYER_SELECT).from(evidenceLayers)
-    .where(and(eq(evidenceLayers.projectId, projectId), eq(evidenceLayers.ownerId, ctx.accountId)))) as LayerRow[];
+    .where(eq(evidenceLayers.projectId, projectId))) as LayerRow[];
   const quote = rootQuote(layer, allLayers);
   const now = new Date().toISOString();
 
@@ -391,7 +382,7 @@ evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/promote"
     const title = parsed.data.title?.trim() || layer.content.slice(0, 60);
     const kind = layer.level === "implication" ? "claim" : "evidence";
     await db.insert(knowledgeItems).values({
-      id, ownerId: ctx.accountId, projectId, paperId: layer.paperId,
+      id, projectId, paperId: layer.paperId,
       kind, title, content: layer.content, quote, note: "", page: layer.page, location: layer.location,
       source: layer.source, status: "confirmed", model: layer.model, generatedAt: layer.generatedAt,
       createdAt: now, updatedAt: now,
@@ -404,7 +395,7 @@ evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/promote"
     const id = crypto.randomUUID();
     const title = parsed.data.title?.trim() || layer.content.slice(0, 60);
     await db.insert(gaps).values({
-      id, ownerId: ctx.accountId, projectId, paperId: layer.paperId,
+      id, projectId, paperId: layer.paperId,
       title, description: layer.content, rationale: `来自证据层晋升(原文:${quote.slice(0, 120)})`,
       status: "candidate", source: layer.source, model: layer.model, generatedAt: now,
       note: `promotedFrom:${layerId}`, createdAt: now, updatedAt: now,
@@ -418,7 +409,7 @@ evidenceLayerRoutes.post("/projects/:projectId/evidence-layers/:layerId/promote"
   const title = parsed.data.title?.trim() || layer.content.slice(0, 60);
   const canvas = { problem: "", gap: "", hypothesis: layer.level === "implication" ? layer.content : "", method: "", experiment: "", risks: "" };
   await db.insert(ideas).values({
-    id, ownerId: ctx.accountId, projectId, sourceGapId: null,
+    id, projectId, sourceGapId: null,
     title, summary: layer.content, status: "Inbox", currentVersionId: null, createdAt: now, updatedAt: now,
   });
   const versionId = crypto.randomUUID();

@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { findOwnedProject } from "../auth/ownership";
+import { projectExists } from "../db/projects";
 import { createDatabase } from "../db/client";
 import { ideaReviews, ideaVersions, ideas, knowledgeItems, ideaEvidence } from "../db/schema";
 import { resolveAiForRequest } from "../services/ai";
@@ -13,12 +13,11 @@ import type { AppEnv } from "../types";
  * - AI 评审:读当前画布 + 本项目知识证据,产出 verdict / strengths / weaknesses / risks / 结构化建议。
  * - 采纳建议:选若干建议 → 后端据此重新修订画布,落一条 human 新版本(C7),评审标 applied。
  * - provenance:source(human/ai)、model、generatedAt;reviewedVersionId / revisedVersionId 串起评审与版本。
- * - 权限复用 findOwnedProject;评审与版本都校验属本项目+本账号。
+ * - 评审与版本都校验属本项目(单用户本地版,无账号归属)。
  */
 
 interface ReviewRow {
   id: string;
-  ownerId: string;
   ideaId: string;
   reviewer: string;
   verdict: "strong" | "viable" | "weak" | "reject";
@@ -37,7 +36,6 @@ interface ReviewRow {
 
 const REVIEW_SELECT = {
   id: ideaReviews.id,
-  ownerId: ideaReviews.ownerId,
   ideaId: ideaReviews.ideaId,
   reviewer: ideaReviews.reviewer,
   verdict: ideaReviews.verdict,
@@ -154,13 +152,12 @@ export const reviewRoutes = new Hono<AppEnv>();
 reviewRoutes.post("/projects/:projectId/ideas/:ideaId/reviews/ai", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
   const db = createDatabase(c.env);
   const idea = await db.select().from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   const version = await loadCurrentVersion(db, ideaId, idea.currentVersionId);
   const evidence = await loadEvidence(db, ideaId);
@@ -183,7 +180,7 @@ reviewRoutes.post("/projects/:projectId/ideas/:ideaId/reviews/ai", async (c) => 
     }));
     const id = crypto.randomUUID();
     await db.insert(ideaReviews).values({
-      id, ownerId: accountId, ideaId, reviewer: accountId,
+      id, ideaId, reviewer: "local",
       verdict: out.verdict, strengths: out.strengths, weaknesses: out.weaknesses, risks: out.risks,
       suggestionsJson: JSON.stringify(out.suggestions),
       source: "ai", model: resolution.model, generatedAt: genAt,
@@ -203,11 +200,10 @@ reviewRoutes.post("/projects/:projectId/ideas/:ideaId/reviews/ai", async (c) => 
 reviewRoutes.get("/projects/:projectId/ideas/:ideaId/reviews", async (c) => {
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const idea = await db.select({ id: ideas.id }).from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   const rows = await db.select(REVIEW_SELECT).from(ideaReviews)
     .where(eq(ideaReviews.ideaId, ideaId)).orderBy(desc(ideaReviews.createdAt));
@@ -219,12 +215,11 @@ reviewRoutes.delete("/projects/:projectId/ideas/:ideaId/reviews/:reviewId", asyn
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
   const reviewId = c.req.param("reviewId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const db = createDatabase(c.env);
   const existing = await db.select({ id: ideaReviews.id }).from(ideaReviews)
     .innerJoin(ideas, eq(ideaReviews.ideaId, ideas.id))
-    .where(and(eq(ideaReviews.id, reviewId), eq(ideaReviews.ideaId, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideaReviews.id, reviewId), eq(ideaReviews.ideaId, ideaId), eq(ideas.projectId, projectId))).get();
   if (!existing) return c.json({ error: "REVIEW_NOT_FOUND" }, 404);
   await db.delete(ideaReviews).where(eq(ideaReviews.id, reviewId));
   return c.json({ id: reviewId, deleted: true });
@@ -240,15 +235,14 @@ reviewRoutes.post("/projects/:projectId/ideas/:ideaId/reviews/:reviewId/apply", 
   const projectId = c.req.param("projectId");
   const ideaId = c.req.param("ideaId");
   const reviewId = c.req.param("reviewId");
-  const accountId = c.get("accountId");
-  if (!(await findOwnedProject(c.env, accountId, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
+  if (!(await projectExists(c.env, projectId))) return c.json({ error: "PROJECT_NOT_FOUND" }, 404);
   const parsed = applySchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "INVALID_APPLY", issues: parsed.error.issues }, 400);
-  const resolution = await resolveAiForRequest(c.env, accountId, {});
+  const resolution = await resolveAiForRequest(c.env, {});
   if ("error" in resolution) return c.json({ error: resolution.error.code, message: resolution.error.message }, 400);
   const db = createDatabase(c.env);
   const idea = await db.select().from(ideas)
-    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId), eq(ideas.ownerId, accountId))).get();
+    .where(and(eq(ideas.id, ideaId), eq(ideas.projectId, projectId))).get();
   if (!idea) return c.json({ error: "IDEA_NOT_FOUND" }, 404);
   const review = await db.select(REVIEW_SELECT).from(ideaReviews)
     .where(and(eq(ideaReviews.id, reviewId), eq(ideaReviews.ideaId, ideaId))).get();

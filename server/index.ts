@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "hono/logger";
 import { aiRoutes } from "./routes/ai";
-import { authRoutes } from "./routes/auth";
 import { cardRoutes } from "./routes/card";
 import { extractionRoutes } from "./routes/extraction";
 import { fileRoutes } from "./routes/files";
@@ -11,7 +10,6 @@ import { libraryRoutes } from "./routes/library";
 import { paperRoutes } from "./routes/papers";
 import { projectRoutes } from "./routes/projects";
 import { readerRoutes } from "./routes/reader";
-import { userRoutes } from "./routes/users";
 import { knowledgeRoutes } from "./routes/knowledge";
 import { gapRoutes } from "./routes/gaps";
 import { ideaRoutes } from "./routes/ideas";
@@ -19,26 +17,14 @@ import { reviewRoutes } from "./routes/reviews";
 import { researchQuestionRoutes } from "./routes/researchQuestions";
 import { experimentRoutes } from "./routes/experiments";
 import { evidenceLayerRoutes } from "./routes/evidenceLayers";
-import { verifySessionToken } from "./auth/session";
 import { getAiProviders } from "./services/ai";
 import type { AppEnv } from "./types";
 
 const app = new Hono<AppEnv>();
 
 app.use("/api/*", logger());
-// 公开端点(无需 Bearer):健康检查 + 登录。其它 /api/* 全部走全局鉴权。
-const PUBLIC_PATHS = new Set<string>(["/api/health", "/api/login"]);
-app.use("/api/*", async (c, next) => {
-  if (PUBLIC_PATHS.has(c.req.path)) return next();
-  const authorization = c.req.header("authorization") ?? "";
-  const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-  const account = await verifySessionToken(token, c.env.APP_ACCESS_TOKEN, c.env);
-  if (!account) return c.json({ error: "UNAUTHORIZED", message: "登录已过期，请重新登录" }, 401);
-  c.set("accountId", account.id);
-  c.set("accountRole", account.role);
-  return next();
-});
 
+// 单用户本地版:无账号、无鉴权。所有 /api/* 直接可达(无需 Bearer)。
 app.get("/api/health", (c) =>
   c.json({
     ok: true,
@@ -52,7 +38,6 @@ app.get("/api/health", (c) =>
 );
 
 app.route("/api", aiRoutes);
-app.route("/api", authRoutes);
 app.route("/api", matrixRoutes);
 app.route("/api", libraryRoutes);
 app.route("/api", projectRoutes);
@@ -61,7 +46,6 @@ app.route("/api", cardRoutes);
 app.route("/api", fileRoutes);
 app.route("/api", extractionRoutes);
 app.route("/api", readerRoutes);
-app.route("/api", userRoutes);
 app.route("/api", knowledgeRoutes);
 app.route("/api", gapRoutes);
 app.route("/api", ideaRoutes);
