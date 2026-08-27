@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { BookOpenText, Clock, Flask, FolderSimple, GearSix, GridFour, House, Lightbulb, MagnifyingGlass, NotePencil, Question, SidebarSimple, Sparkle } from "@phosphor-icons/react";
+import { BookOpenText, Clock, Flask, FolderSimple, GearSix, GitBranch, GridFour, MagnifyingGlass, NotePencil, SidebarSimple, Sparkle } from "@phosphor-icons/react";
 import { useWorkspace } from "../state/workspace";
 import { BrandMark } from "./BrandMark";
 
@@ -28,14 +28,12 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
   const encodedProjectId = encodeURIComponent(projectId);
   const mainNav: NavItem[] = inProject
     ? [
-        { to: `/projects/${encodedProjectId}`, label: "概览", icon: <House />, end: true },
+        { to: `/projects/${encodedProjectId}`, label: "AI 研究助手", icon: <Sparkle weight="fill" />, end: true },
         { to: `/projects/${encodedProjectId}/library`, label: "文献", icon: <BookOpenText />, prefix: `/projects/${projectId}/library` },
         { to: `/projects/${encodedProjectId}/matrices`, label: "证据矩阵", icon: <GridFour weight="fill" />, prefix: `/projects/${projectId}/matrices` },
-        { to: `/knowledge?project=${encodedProjectId}`, label: "知识", icon: <NotePencil />, prefix: "/knowledge" },
-        { to: `/ideas?project=${encodedProjectId}`, label: "Ideas", icon: <Lightbulb />, prefix: "/ideas" },
-        { to: `/projects/${encodedProjectId}/gaps`, label: "发现缺口", icon: <Question />, prefix: `/projects/${projectId}/gaps` },
-        { to: `/projects/${encodedProjectId}/questions`, label: "研究问题", icon: <MagnifyingGlass />, prefix: `/projects/${projectId}/questions` },
+        { to: `/projects/${encodedProjectId}/research`, label: "研究脉络", icon: <GitBranch />, prefix: `/projects/${projectId}/research` },
         { to: `/projects/${encodedProjectId}/experiments`, label: "实验", icon: <Flask />, prefix: `/projects/${projectId}/experiments` },
+        { to: `/projects/${encodedProjectId}/writing`, label: "论文写作", icon: <NotePencil />, prefix: `/projects/${projectId}/writing` },
       ]
     : [];
 
@@ -52,11 +50,6 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
         <span className="brand-text">ArguMesh<small>论脉 · Research Workbench</small></span>
       </NavLink>
       <nav aria-label="项目研究导航">
-        {inProject ? (
-          <button type="button" className="nav-item nav-ai" onClick={() => window.dispatchEvent(new CustomEvent("paperidea:open-ai"))} aria-label="打开 AI 助手">
-            <Sparkle weight="fill" /><span>AI 助手</span>
-          </button>
-        ) : null}
         {mainNav.map((item) => (
           <NavLink key={item.to} to={item.to} end={item.end} title={item.label} className={() => `nav-item${isActive(item) ? " active" : ""}`}>
             {item.icon}<span>{item.label}</span>

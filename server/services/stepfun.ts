@@ -17,6 +17,24 @@ interface StepFunResponse {
   };
 }
 
+interface AnthropicResponse {
+  content?: Array<{
+    type?: string;
+    text?: string;
+  }>;
+  error?: {
+    message?: string;
+  };
+}
+
+export function inferAiApiFormat(baseUrl: string): "openai" | "anthropic" {
+  try {
+    return /(^|\/)anthropic$/i.test(new URL(baseUrl).pathname.replace(/\/+$/, "")) ? "anthropic" : "openai";
+  } catch {
+    return "openai";
+  }
+}
+
 export async function createStepFunCompletion(
   env: AppBindings,
   messages: StepFunMessage[],
@@ -25,7 +43,13 @@ export async function createStepFunCompletion(
   // 账户级自定义配置(设置页保存)优先;否则按 provider 从环境变量厂商里选(未指定时用第一个可用 provider)。
   const provider = options.providerConfig ?? findProvider(env, options.provider);
   if (!provider) throw new Error("No AI provider configured");
-  const endpoint = `${provider.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const baseUrl = provider.baseUrl.replace(/\/+$/, "");
+  const apiFormat = inferAiApiFormat(baseUrl);
+  if (apiFormat === "anthropic") {
+    return createAnthropicCompletion(baseUrl, provider.apiKey, messages, options);
+  }
+
+  const endpoint = `${baseUrl}/chat/completions`;
   // MiniMax(api.minimaxi.com)不识别 reasoning_effort,且默认带 <think> 思考块会污染 JSON 输出;
   // 通过 thinking_mode: false 关掉思考(MiniMax 兼容参数)。StepFun 忽略未知字段。
   const body: Record<string, unknown> = {
@@ -51,14 +75,52 @@ export async function createStepFunCompletion(
 
   const payload = (await response.json().catch(() => null)) as StepFunResponse | null;
   if (!response.ok) {
-    throw new Error(payload?.error?.message ?? `StepFun request failed (${response.status})`);
+    throw new Error(payload?.error?.message ?? `AI request failed (${response.status})`);
   }
 
   const content = payload?.choices?.[0]?.message?.content?.trim();
   if (!content) {
-    throw new Error("StepFun returned an empty extraction plan");
+    throw new Error("AI returned an empty response");
   }
   // 剥除模型残留的 <think> 思考块(MiniMax 部分模型即使 thinking_mode: false 也可能输出)。
+  return stripThinkBlock(content);
+}
+
+async function createAnthropicCompletion(
+  baseUrl: string,
+  apiKey: string,
+  messages: StepFunMessage[],
+  options: { maxTokens?: number; timeoutMs?: number; model?: string },
+): Promise<string> {
+  const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
+  const response = await fetch(`${baseUrl}/v1/messages`, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: options.model,
+      max_tokens: options.maxTokens ?? 1200,
+      ...(system ? { system } : {}),
+      messages: messages
+        .filter((message) => message.role !== "system")
+        .map((message) => ({ role: message.role, content: message.content })),
+    }),
+    signal: AbortSignal.timeout(options.timeoutMs ?? 55_000),
+  });
+
+  const payload = (await response.json().catch(() => null)) as AnthropicResponse | null;
+  if (!response.ok) {
+    throw new Error(payload?.error?.message ?? `AI request failed (${response.status})`);
+  }
+  const content = payload?.content
+    ?.filter((block) => block.type === "text" && block.text)
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+  if (!content) throw new Error("AI returned an empty response");
   return stripThinkBlock(content);
 }
 

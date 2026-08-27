@@ -17,6 +17,7 @@ let fakeUrl = "";
 interface ReceivedRequest {
   url: string;
   authorization: string;
+  xApiKey: string;
   model: unknown;
 }
 
@@ -38,9 +39,16 @@ beforeAll(async () => {
     request.on("data", (chunk) => { raw += chunk; });
     request.on("end", () => {
       const body = JSON.parse(raw || "{}") as { model?: unknown };
-      received = { url: request.url ?? "", authorization: request.headers.authorization ?? "", model: body.model };
+      received = {
+        url: request.url ?? "",
+        authorization: request.headers.authorization ?? "",
+        xApiKey: typeof request.headers["x-api-key"] === "string" ? request.headers["x-api-key"] : "",
+        model: body.model,
+      };
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ choices: [{ message: { content: "你好" } }] }));
+      response.end(request.url?.endsWith("/v1/messages")
+        ? JSON.stringify({ content: [{ type: "text", text: "你好" }] })
+        : JSON.stringify({ choices: [{ message: { content: "你好" } }] }));
     });
   });
   await new Promise<void>((resolve) => fakeAi.listen(0, "127.0.0.1", resolve));
@@ -96,6 +104,44 @@ describe("AI 配置 API", () => {
     );
     expect(response.status).toBe(200);
     expect(lastReceived()).toMatchObject({ url: "/v1/chat/completions", authorization: "Bearer sk-test-abc1234567", model: "test-model-x" });
+  });
+
+  it("/anthropic Base URL 自动使用 Anthropic Messages API", async () => {
+    const anthropicBaseUrl = fakeUrl.replace(/\/v1$/, "/anthropic");
+    try {
+      await app.request(
+        "http://localhost/api/ai/config",
+        {
+          method: "PUT",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ baseUrl: anthropicBaseUrl, apiKey: "sk-anthropic-test", model: "deepseek-v4-pro" }),
+        },
+        ctx.bindings,
+      );
+      received = null;
+      const response = await app.request(
+        "http://localhost/api/reader/translate",
+        { method: "POST", headers: jsonHeaders(), body: translateBody() },
+        ctx.bindings,
+      );
+      expect(response.status).toBe(200);
+      expect(lastReceived()).toMatchObject({
+        url: "/anthropic/v1/messages",
+        authorization: "",
+        xApiKey: "sk-anthropic-test",
+        model: "deepseek-v4-pro",
+      });
+    } finally {
+      await app.request(
+        "http://localhost/api/ai/config",
+        {
+          method: "PUT",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ baseUrl: fakeUrl, apiKey: "sk-test-abc1234567", model: "test-model-x" }),
+        },
+        ctx.bindings,
+      );
+    }
   });
 
   it("保存时留空 API Key = 保留已保存的密钥", async () => {

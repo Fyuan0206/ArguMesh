@@ -259,6 +259,75 @@ export const rqPapers = sqliteTable(
 );
 
 /**
+ * 研究问题来源(迁移 0010):记录一条研究问题由哪个既有洞见提升而来。
+ * originId 是跨 knowledge/gap/idea 的多态引用,因此不设单表 FK;路由层在写入前
+ * 校验来源属于同一项目。RQ/project 删除时级联清理,唯一索引保证同一来源只提升一次。
+ */
+export const researchQuestionOrigins = sqliteTable(
+  "research_question_origins",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    rqId: text("rq_id").notNull().references(() => researchQuestions.id, { onDelete: "cascade" }),
+    originType: text("origin_type", { enum: ["knowledge", "gap", "idea"] }).notNull(),
+    originId: text("origin_id").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("rq_origins_origin_uniq").on(table.projectId, table.originType, table.originId),
+    index("rq_origins_rq_idx").on(table.rqId),
+    index("rq_origins_project_idx").on(table.projectId),
+  ],
+);
+
+/**
+ * 研究问题结论：把一次真实结果的 AI 分析以 append-only 草稿回挂到 RQ。
+ * 重新分析会新增记录而不是覆盖旧结论；confirmed 只能由显式确认接口产生。
+ */
+export const researchQuestionConclusions = sqliteTable(
+  "research_question_conclusions",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    rqId: text("rq_id").notNull().references(() => researchQuestions.id, { onDelete: "cascade" }),
+    experimentId: text("experiment_id").notNull().references(() => experiments.id, { onDelete: "cascade" }),
+    resultId: text("result_id").notNull().references(() => experimentResults.id, { onDelete: "cascade" }),
+    summary: text("summary").notNull(),
+    supportLevel: text("support_level", { enum: ["supports", "partial", "not_supported", "insufficient"] }).notNull(),
+    limitationsJson: text("limitations_json").notNull().default("[]"),
+    source: text("source", { enum: ["human", "ai"] }).notNull().default("ai"),
+    status: text("status", { enum: ["draft", "confirmed"] }).notNull().default("draft"),
+    model: text("model"),
+    generatedAt: text("generated_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("rq_conclusions_rq_created_idx").on(table.rqId, table.createdAt),
+    index("rq_conclusions_result_idx").on(table.resultId),
+    index("rq_conclusions_project_idx").on(table.projectId),
+  ],
+);
+
+/** 研究问题与原子知识证据的直接关联；用于 Agent 精确挂证据而非只挂整篇论文。 */
+export const researchQuestionEvidence = sqliteTable(
+  "research_question_evidence",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    rqId: text("rq_id").notNull().references(() => researchQuestions.id, { onDelete: "cascade" }),
+    knowledgeItemId: text("knowledge_item_id").notNull().references(() => knowledgeItems.id, { onDelete: "cascade" }),
+    stance: text("stance", { enum: ["supports", "contradicts", "context"] }).notNull().default("context"),
+    note: text("note").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("rq_evidence_rq_item_uniq").on(table.rqId, table.knowledgeItemId),
+    index("rq_evidence_project_idx").on(table.projectId),
+    index("rq_evidence_rq_idx").on(table.rqId),
+  ],
+);
+
+/**
  * 研究缺口(迁移 0007):Gap 一等对象。
  * - 状态机:candidate(候选)→ searching(补充检索)→ evidenced(证据充分)→ converted(已转 Idea)
  *   或任一阶段 → rejected(已否决)。
@@ -451,12 +520,72 @@ export const experimentResults = sqliteTable(
     metricsJson: text("metrics_json").notNull().default("{}"),
     figuresJson: text("figures_json").notNull().default("[]"),
     notes: text("notes").notNull().default(""),
+    sourceType: text("source_type", { enum: ["manual", "csv", "json", "pasted"] }).notNull().default("manual"),
+    sourceName: text("source_name").notNull().default(""),
+    rawDataJson: text("raw_data_json").notNull().default("{}"),
+    normalizedDataJson: text("normalized_data_json").notNull().default("[]"),
+    mappingJson: text("mapping_json").notNull().default("{}"),
+    analysisJson: text("analysis_json").notNull().default(""),
+    analysisStatus: text("analysis_status", { enum: ["pending", "draft", "confirmed"] }).notNull().default("pending"),
+    model: text("model"),
+    generatedAt: text("generated_at"),
     createdAt: text("created_at").notNull(),
   },
   (table) => [
     index("experiment_results_exp_idx").on(table.experimentId, table.createdAt),
     uniqueIndex("experiment_results_exp_run_uniq").on(table.experimentId, table.runNo),
   ],
+);
+
+/** 项目级持久 Research Agent 会话。 */
+export const aiConversations = sqliteTable(
+  "ai_conversations",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("新研究对话"),
+    mode: text("mode").notNull().default("research_orchestrator"),
+    status: text("status", { enum: ["active", "cancelled"] }).notNull().default("active"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [index("ai_conversations_project_updated_idx").on(table.projectId, table.updatedAt)],
+);
+
+/** 对话消息和领域引用；消息正文与工具动作分离。 */
+export const aiMessages = sqliteTable(
+  "ai_messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
+    content: text("content").notNull(),
+    citationsJson: text("citations_json").notNull().default("[]"),
+    model: text("model"),
+    status: text("status", { enum: ["pending", "completed", "failed", "cancelled"] }).notNull().default("completed"),
+    error: text("error").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("ai_messages_conversation_created_idx").on(table.conversationId, table.createdAt)],
+);
+
+/** Research Agent 的受限领域动作审计记录。 */
+export const aiActions = sqliteTable(
+  "ai_actions",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+    messageId: text("message_id").notNull().references(() => aiMessages.id, { onDelete: "cascade" }),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    toolName: text("tool_name").notNull(),
+    inputJson: text("input_json").notNull().default("{}"),
+    outputJson: text("output_json").notNull().default("{}"),
+    status: text("status", { enum: ["completed", "failed", "cancelled"] }).notNull(),
+    error: text("error").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("ai_actions_conversation_created_idx").on(table.conversationId, table.createdAt)],
 );
 
 /**

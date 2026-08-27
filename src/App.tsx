@@ -1,8 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
-import { CommandPalette } from "./components/ai/CommandPalette";
-import { IdeasPage } from "./pages/IdeasPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { MatricesIndexPage } from "./pages/MatricesIndexPage";
 import { MatrixPage } from "./pages/MatrixPage";
@@ -10,17 +8,27 @@ import { ProjectHomePage } from "./pages/ProjectHomePage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { IdeaCanvasPage } from "./pages/IdeaCanvasPage";
-import { KnowledgePage } from "./pages/KnowledgePage";
 import { PaperPage } from "./pages/PaperPage";
 import { SearchPage } from "./pages/SearchPage";
 import { TasksPage } from "./pages/TasksPage";
-import { ResearchQuestionsPage } from "./pages/ResearchQuestionsPage";
-import { GapsPage } from "./pages/GapsPage";
 import { ExperimentsPage } from "./pages/ExperimentsPage";
+import { ResearchThreadPage } from "./pages/ResearchThreadPage";
+import { WritingPage } from "./pages/WritingPage";
 import { ProjectProvider } from "./state/project";
 import { WorkspaceProvider } from "./state/workspace";
 
 const ReaderPage = lazy(() => import("./pages/ReaderPage").then((module) => ({ default: module.ReaderPage })));
+
+function LegacyResearchRedirect({ view, type }: { view: "insights" | "questions"; type?: string }) {
+  const { projectId: routeProjectId } = useParams<{ projectId: string }>();
+  const location = useLocation();
+  const queryProjectId = new URLSearchParams(location.search).get("project") ?? "";
+  const projectId = routeProjectId ?? queryProjectId;
+  if (!projectId) return <Navigate to="/projects" replace />;
+  const params = new URLSearchParams({ view });
+  if (type) params.set("type", type);
+  return <Navigate to={`/projects/${encodeURIComponent(projectId)}/research?${params}`} replace />;
+}
 
 function AppShell() {
   const location = useLocation();
@@ -44,7 +52,6 @@ function AppShell() {
       <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((open) => !open)} />
       <section className={`workspace ${isMatrix || isReader ? "" : "route-workspace"} ${isReader ? "reader-workspace" : ""}`}>
         <Outlet />
-        <CommandPalette />
       </section>
     </main>
   );
@@ -67,20 +74,22 @@ export function App() {
             <Route path="/projects/:projectId/library/:paperId/read" element={<Suspense fallback={<div className="reader-route-loading">正在加载 PDF 阅读器…</div>}><ReaderPage /></Suspense>} />
             <Route path="/projects/:projectId/matrices" element={<MatricesIndexPage />} />
             <Route path="/projects/:projectId/matrices/:matrixId" element={<MatrixPage />} />
-            {/* 研究弧(v2.0):Research Question 脊柱 / Gap / Experiment,均项目作用域。 */}
-            <Route path="/projects/:projectId/questions" element={<ResearchQuestionsPage />} />
-            <Route path="/projects/:projectId/gaps" element={<GapsPage />} />
+            <Route path="/projects/:projectId/research" element={<ResearchThreadPage />} />
+            {/* 旧研究对象入口统一重定向到“研究脉络”，保留书签兼容。 */}
+            <Route path="/projects/:projectId/questions" element={<LegacyResearchRedirect view="questions" />} />
+            <Route path="/projects/:projectId/gaps" element={<LegacyResearchRedirect view="insights" type="gap" />} />
             <Route path="/projects/:projectId/experiments" element={<ExperimentsPage />} />
-            <Route path="/questions" element={<ResearchQuestionsPage />} />
-            <Route path="/gaps" element={<GapsPage />} />
+            <Route path="/projects/:projectId/writing" element={<WritingPage />} />
+            <Route path="/questions" element={<LegacyResearchRedirect view="questions" />} />
+            <Route path="/gaps" element={<LegacyResearchRedirect view="insights" type="gap" />} />
             <Route path="/experiments" element={<ExperimentsPage />} />
             {/* 旧链接兼容:/matrices(全局矩阵列表)与 /knowledge/matrices/:matrixId(矩阵详情)。 */}
             <Route path="/matrices" element={<MatricesIndexPage />} />
             <Route path="/knowledge/matrices/:projectId" element={<MatrixPage />} />
             <Route path="/library" element={<LibraryPage />} />
-            <Route path="/ideas" element={<IdeasPage />} />
+            <Route path="/ideas" element={<LegacyResearchRedirect view="insights" type="concept" />} />
             <Route path="/ideas/:ideaId/canvas" element={<IdeaCanvasPage />} />
-            <Route path="/knowledge" element={<KnowledgePage />} />
+            <Route path="/knowledge" element={<LegacyResearchRedirect view="insights" />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/settings" element={<SettingsPage />} />

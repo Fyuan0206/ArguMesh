@@ -10,6 +10,8 @@ export interface AppBindings {
   STEPFUN_MODEL?: string;
   AI_MODELS?: string;
   AI_PROVIDERS?: string;
+  /** 可选 LaTeX 引擎绝对路径；仅允许 tectonic/latexmk 可执行文件。 */
+  LATEX_ENGINE_PATH?: string;
 }
 
 /**

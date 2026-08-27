@@ -37,6 +37,7 @@ coverage/
 playwright-report/
 test-results/
 qa/
+design-qa-artifacts/
 
 # --- 操作系统 / 编辑器 ---
 .DS_Store

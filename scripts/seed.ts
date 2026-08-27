@@ -211,6 +211,19 @@ await client.executeMultiple(`
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
   );
   CREATE INDEX IF NOT EXISTS rq_papers_project_idx ON rq_papers (project_id);
+  CREATE TABLE IF NOT EXISTS research_question_origins (
+    id text PRIMARY KEY NOT NULL,
+    project_id text NOT NULL,
+    rq_id text NOT NULL,
+    origin_type text NOT NULL CHECK (origin_type IN ('knowledge', 'gap', 'idea')),
+    origin_id text NOT NULL,
+    created_at text NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade,
+    FOREIGN KEY (rq_id) REFERENCES research_questions(id) ON DELETE cascade
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS rq_origins_origin_uniq ON research_question_origins (project_id, origin_type, origin_id);
+  CREATE INDEX IF NOT EXISTS rq_origins_rq_idx ON research_question_origins (rq_id);
+  CREATE INDEX IF NOT EXISTS rq_origins_project_idx ON research_question_origins (project_id);
   CREATE TABLE IF NOT EXISTS gaps (
     id text PRIMARY KEY NOT NULL,
     project_id text NOT NULL,
@@ -343,11 +356,62 @@ await client.executeMultiple(`
     metrics_json text DEFAULT '{}' NOT NULL,
     figures_json text DEFAULT '[]' NOT NULL,
     notes text DEFAULT '' NOT NULL,
+    source_type text DEFAULT 'manual' NOT NULL,
+    source_name text DEFAULT '' NOT NULL,
+    raw_data_json text DEFAULT '{}' NOT NULL,
+    normalized_data_json text DEFAULT '[]' NOT NULL,
+    mapping_json text DEFAULT '{}' NOT NULL,
+    analysis_json text DEFAULT '' NOT NULL,
+    analysis_status text DEFAULT 'pending' NOT NULL,
+    model text,
+    generated_at text,
     created_at text NOT NULL,
     FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE cascade
   );
   CREATE INDEX IF NOT EXISTS experiment_results_exp_idx ON experiment_results (experiment_id, created_at);
   CREATE UNIQUE INDEX IF NOT EXISTS experiment_results_exp_run_uniq ON experiment_results (experiment_id, run_no);
+  CREATE TABLE IF NOT EXISTS ai_conversations (
+    id text PRIMARY KEY NOT NULL,
+    project_id text NOT NULL,
+    title text DEFAULT '新研究对话' NOT NULL,
+    mode text DEFAULT 'research_orchestrator' NOT NULL,
+    status text DEFAULT 'active' NOT NULL,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
+  );
+  CREATE INDEX IF NOT EXISTS ai_conversations_project_updated_idx ON ai_conversations (project_id, updated_at);
+  CREATE TABLE IF NOT EXISTS ai_messages (
+    id text PRIMARY KEY NOT NULL,
+    conversation_id text NOT NULL,
+    project_id text NOT NULL,
+    role text NOT NULL,
+    content text NOT NULL,
+    citations_json text DEFAULT '[]' NOT NULL,
+    model text,
+    status text DEFAULT 'completed' NOT NULL,
+    error text DEFAULT '' NOT NULL,
+    created_at text NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE cascade,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
+  );
+  CREATE INDEX IF NOT EXISTS ai_messages_conversation_created_idx ON ai_messages (conversation_id, created_at);
+  CREATE TABLE IF NOT EXISTS ai_actions (
+    id text PRIMARY KEY NOT NULL,
+    conversation_id text NOT NULL,
+    message_id text NOT NULL,
+    project_id text NOT NULL,
+    tool_name text NOT NULL,
+    input_json text DEFAULT '{}' NOT NULL,
+    output_json text DEFAULT '{}' NOT NULL,
+    status text NOT NULL,
+    error text DEFAULT '' NOT NULL,
+    created_at text NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE cascade,
+    FOREIGN KEY (message_id) REFERENCES ai_messages(id) ON DELETE cascade,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
+  );
+  CREATE INDEX IF NOT EXISTS ai_actions_conversation_created_idx ON ai_actions (conversation_id, created_at);
   CREATE TABLE IF NOT EXISTS evidence_layers (
     id text PRIMARY KEY NOT NULL,
     project_id text NOT NULL,
@@ -445,7 +509,19 @@ for (const entry of journal.entries) {
     args: [migrationHash, entry.when],
   });
 }
-console.log(`已登记 ${journal.entries.length} 个 Drizzle 迁移。`);
+for (const [hash, createdAt] of [
+  ["0008_drop_accounts", 8],
+  ["0009_workspace_path", 9],
+  ["0010_research_question_origins", 10],
+  ["0011_experiment_result_analysis", 11],
+  ["0012_research_agent_conversations", 12],
+] as const) {
+  await client.execute({
+    sql: "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+    args: [hash, createdAt],
+  });
+}
+console.log(`已登记 ${journal.entries.length} 个 Drizzle 迁移与 5 个自定义迁移。`);
 
 client.close();
 console.log("种子完成:演示项目 demo-occluded-pose。运行 pnpm run dev 即可开始使用。");

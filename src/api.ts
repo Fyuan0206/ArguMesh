@@ -441,6 +441,60 @@ export interface ResearchQuestion {
   papers: RqLinkedPaper[];
 }
 
+export type InsightType = "finding" | "contradiction" | "gap" | "concept";
+export type InsightOriginType = "knowledge" | "gap" | "idea";
+
+export interface ResearchInsight {
+  id: string;
+  originType: InsightOriginType;
+  type: InsightType;
+  title: string;
+  summary: string;
+  status: string;
+  source: "human" | "ai";
+  model: string | null;
+  generatedAt: string | null;
+  createdAt: string;
+  evidenceCount: number;
+  paperIds: string[];
+  researchQuestionIds: string[];
+}
+
+export interface ThreadResearchQuestion extends ResearchQuestion {
+  origins: Array<{ type: InsightOriginType; id: string }>;
+  evidence: Array<{ id: string; rqId: string; knowledgeItemId: string; stance: "supports" | "contradicts" | "context"; note: string; title: string; paperId: string; createdAt: string }>;
+  conclusions: Array<{
+    id: string;
+    projectId: string;
+    rqId: string;
+    experimentId: string;
+    resultId: string;
+    summary: string;
+    supportLevel: "supports" | "partial" | "not_supported" | "insufficient";
+    limitations: string[];
+    source: "human" | "ai";
+    status: "draft" | "confirmed";
+    model: string | null;
+    generatedAt: string | null;
+    createdAt: string;
+  }>;
+}
+
+export interface ResearchThread {
+  insights: ResearchInsight[];
+  researchQuestions: ThreadResearchQuestion[];
+  stats: {
+    insights: number;
+    findings: number;
+    contradictions: number;
+    gaps: number;
+    concepts: number;
+    questions: number;
+    conclusions: number;
+    questionEvidence: number;
+  };
+}
+
 /** Gap 缺口(迁移 0009):研究缺口一等对象,带状态机。provenance 同 Knowledge。 */
 export type GapStatus = "candidate" | "searching" | "evidenced" | "converted" | "rejected";
 export type GapSource = "human" | "ai";
@@ -525,6 +579,29 @@ export async function createKnowledge(
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/knowledge`, {
     method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
   }));
+}
+
+/** 聚合读取项目内的洞见池与研究问题。 */
+export async function getResearchThread(projectId: string): Promise<ResearchThread> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/research-thread`, {
+    headers: authenticatedHeaders(),
+  }));
+}
+
+/** 将 Knowledge / Gap / Idea 洞见提升为研究问题，并保留来源关系。 */
+export async function promoteInsight(
+  projectId: string,
+  insight: Pick<ResearchInsight, "originType" | "id">,
+  input: { question: string; goal?: string },
+): Promise<{ researchQuestion: ThreadResearchQuestion; origin: { type: InsightOriginType; id: string }; created: boolean }> {
+  return parseResponse(await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/insights/${encodeURIComponent(insight.originType)}/${encodeURIComponent(insight.id)}/promote`,
+    {
+      method: "POST",
+      headers: authenticatedHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify(input),
+    },
+  ));
 }
 
 /** Reader 划选 AI 提炼:后端按 quote+page+paperId 生成并直接存 draft,返回带 provenance 的 KnowledgeItem。 */
@@ -729,6 +806,40 @@ export async function unlinkRqPaper(projectId: string, rqId: string, paperId: st
 
 export type ExperimentStatus = "planned" | "running" | "done" | "failed";
 export type ExperimentSource = "human" | "ai";
+export interface AblationDesign {
+  name: string;
+  change: string;
+  hypothesis: string;
+  control: string;
+  fixedConditions: string[];
+  metrics: string[];
+  expectedDirection: string;
+}
+export interface ExperimentDesign {
+  objective: string;
+  hypothesis: string;
+  datasets: string[];
+  baselines: string[];
+  independentVariables: string[];
+  dependentVariables: string[];
+  controlledVariables: string[];
+  metrics: string[];
+  procedure: string[];
+  successCriteria: string[];
+  risks: string[];
+  ablations: AblationDesign[];
+}
+export interface ResultEvidenceRef { row: number; field: string }
+export interface ResultFinding { claim: string; interpretation?: string; evidenceRefs: ResultEvidenceRef[] }
+export interface ResultAnalysis {
+  summary: string;
+  findings: ResultFinding[];
+  ablationFindings: ResultFinding[];
+  anomalies: Array<{ description: string; evidenceRefs: ResultEvidenceRef[] }>;
+  supportLevel: "supports" | "partial" | "not_supported" | "insufficient";
+  limitations: string[];
+  resultsDraft: string;
+}
 export interface ExperimentResult {
   id: string;
   experimentId: string;
@@ -736,6 +847,15 @@ export interface ExperimentResult {
   metrics: Record<string, unknown>;
   figures: unknown[];
   notes: string;
+  sourceType: "manual" | "csv" | "json" | "pasted";
+  sourceName: string;
+  rawData: unknown;
+  normalizedData: Array<Record<string, unknown>>;
+  mapping: Record<string, string>;
+  analysis: ResultAnalysis | null;
+  analysisStatus: "pending" | "draft" | "confirmed";
+  model: string | null;
+  generatedAt: string | null;
   createdAt: string;
 }
 
@@ -781,6 +901,11 @@ export interface Experiment {
   createdAt: string;
   updatedAt: string;
   results: ExperimentResult[];
+}
+
+export function asExperimentDesign(config: Record<string, unknown>): ExperimentDesign | null {
+  if (typeof config !== "object" || config === null || typeof config.hypothesis !== "string" || !Array.isArray(config.ablations)) return null;
+  return config as unknown as ExperimentDesign;
 }
 
 /** 创建一个实验(可选挂 ideaId/rqId;均须属本项目)。 */
@@ -834,6 +959,172 @@ export async function addExperimentResult(
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/results`, {
     method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
   }));
+}
+
+/** 创建一份结构化人工实验设计。 */
+export async function createExperimentDesign(
+  projectId: string,
+  input: { title: string; rqId?: string; ideaId?: string; design: ExperimentDesign },
+): Promise<{ experiment: Experiment }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/design`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 保存结构化设计；不会改写已导入结果。 */
+export async function updateExperimentDesign(projectId: string, experimentId: string, design: ExperimentDesign): Promise<{ experiment: Experiment }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/design`, {
+    method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(design),
+  }));
+}
+
+/** AI 依据关联研究问题与项目证据生成设计，不执行实验。 */
+export async function generateExperimentDesign(projectId: string, experimentId: string): Promise<{ experiment: Experiment }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/design-with-ai`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: "{}",
+  }));
+}
+
+/** 从研究问题直接生成 AI 主实验与消融设计草稿。 */
+export async function createAiExperimentDesign(
+  projectId: string,
+  input: { rqId: string; title?: string; constraints?: string },
+): Promise<{ experiment: Experiment }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/design-with-ai`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 导入真实实验结果，保留原始数据和规范化行。 */
+export async function importExperimentResult(
+  projectId: string,
+  experimentId: string,
+  input: { sourceType: "manual" | "csv" | "json" | "pasted"; sourceName?: string; data: string | Record<string, unknown> | Array<Record<string, unknown>>; mapping?: Record<string, string>; notes?: string },
+): Promise<{ result: ExperimentResult }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/results/import`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+  }));
+}
+
+/** 分析一份已导入结果；后端会校验 AI 的行列引用后才保存。 */
+export async function analyzeExperimentResult(projectId: string, experimentId: string, resultId: string): Promise<{ result: ExperimentResult }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/experiments/${encodeURIComponent(experimentId)}/results/${encodeURIComponent(resultId)}/analyze`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: "{}",
+  }));
+}
+
+// ─── Persistent Research Agent ───
+export interface AiConversation {
+  id: string;
+  projectId: string;
+  title: string;
+  mode: string;
+  status: "active" | "cancelled";
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AiCitation {
+  kind: "project" | "paper" | "insight" | "research_question" | "experiment" | "result";
+  id: string;
+  label: string;
+  href: string;
+}
+export interface AiMessage {
+  id: string;
+  conversationId: string;
+  projectId: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: AiCitation[];
+  model: string | null;
+  status: "pending" | "completed" | "failed" | "cancelled";
+  error: string;
+  createdAt: string;
+}
+export interface AiAction {
+  id: string;
+  conversationId: string;
+  messageId: string;
+  projectId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  output: { id?: string; href?: string };
+  status: "completed" | "failed" | "cancelled";
+  error: string;
+  createdAt: string;
+}
+
+export async function listAiConversations(projectId: string): Promise<{ conversations: AiConversation[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations`, { headers: authenticatedHeaders() }));
+}
+export async function createAiConversation(projectId: string, title = "新研究对话"): Promise<{ conversation: AiConversation }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ title }),
+  }));
+}
+export async function getAiConversation(projectId: string, conversationId: string): Promise<{ conversation: AiConversation; messages: AiMessage[]; actions: AiAction[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}`, { headers: authenticatedHeaders() }));
+}
+export async function sendAiMessage(projectId: string, conversationId: string, content: string): Promise<{ message: AiMessage; action: AiAction | null; mode: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ content }),
+  }));
+}
+export async function cancelAiConversation(projectId: string, conversationId: string): Promise<{ id: string; status: "cancelled" }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/cancel`, {
+    method: "POST", headers: authenticatedHeaders(),
+  }));
+}
+
+// ─── Evidence-driven LaTeX writing ───
+export interface PaperSource { file: "main.tex" | "references.bib"; content: string; version: string; updatedAt: string; missingCitations?: string[] }
+export interface PaperOutlineItem { level: "section" | "subsection"; title: string; line: number }
+export interface CompileIssue { severity: "error" | "warning"; message: string; line: number | null }
+export interface PaperCompileStatus {
+  status: "idle" | "running" | "succeeded" | "failed" | "cancelled" | "unavailable";
+  engine: "tectonic" | "latexmk" | null;
+  availableEngine?: "tectonic" | "latexmk" | null;
+  startedAt: string | null; finishedAt: string | null; log: string; issues: CompileIssue[]; pdfUpdatedAt: string | null;
+}
+export interface PaperSnapshot { id: string; reason: string; createdAt: string }
+export interface PaperPatch {
+  summary: string; proposedSource: string; warnings: string[];
+  citations: Array<{ kind: string; id: string; label: string }>;
+}
+export async function initializePaper(projectId: string) {
+  return parseResponse<{ createdMain: boolean; createdBibliography: boolean; paperDir: string }>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/initialize`, { method: "POST", headers: authenticatedHeaders() }));
+}
+export async function getPaperSource(projectId: string, file: "main.tex" | "references.bib" = "main.tex"): Promise<PaperSource> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/source?file=${encodeURIComponent(file)}`, { headers: authenticatedHeaders() }));
+}
+export async function getPaperOutline(projectId: string): Promise<{ outline: PaperOutlineItem[]; version: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/outline`, { headers: authenticatedHeaders() }));
+}
+export async function savePaperSource(projectId: string, file: "main.tex" | "references.bib", content: string, expectedVersion: string): Promise<PaperSource> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/source?file=${encodeURIComponent(file)}`, {
+    method: "PUT", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ content, expectedVersion }),
+  }));
+}
+export async function proposePaperPatch(projectId: string, instruction: string, baseVersion: string, selection?: { start: number; end: number }): Promise<{ patch: PaperPatch; baseVersion: string; model: string; generatedAt: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/patch`, {
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ instruction, baseVersion, selection }),
+  }));
+}
+export async function getPaperProposal(projectId: string, actionId: string): Promise<{ proposal: PaperPatch & { baseVersion: string }; baseVersion: string; href?: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/proposals/${encodeURIComponent(actionId)}`, { headers: authenticatedHeaders() }));
+}
+export async function compilePaper(projectId: string): Promise<PaperCompileStatus> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/compile`, { method: "POST", headers: authenticatedHeaders() }));
+}
+export async function getPaperCompileStatus(projectId: string): Promise<PaperCompileStatus> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/compile-status`, { headers: authenticatedHeaders() }));
+}
+export function paperPdfUrl(projectId: string, version = "") { return `/api/projects/${encodeURIComponent(projectId)}/paper/pdf${version ? `?v=${encodeURIComponent(version)}` : ""}`; }
+export async function listPaperSnapshots(projectId: string): Promise<{ snapshots: PaperSnapshot[] }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/snapshots`, { headers: authenticatedHeaders() }));
+}
+export async function restorePaperSnapshot(projectId: string, snapshotId: string): Promise<{ restored: true; snapshotId: string }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper/snapshots/${encodeURIComponent(snapshotId)}/restore`, { method: "POST", headers: authenticatedHeaders() }));
 }
 
 /** 删除一条结果(append-only 模型的谨慎操作)。 */

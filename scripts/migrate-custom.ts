@@ -131,6 +131,168 @@ async function applyMigration0009(client: Client): Promise<void> {
   });
 }
 
+// ─── Migration 0010:研究问题来源(洞见 → RQ) ───
+
+const MIGRATION_0010_HASH = "0010_research_question_origins";
+
+async function applyMigration0010(client: Client): Promise<void> {
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS research_question_origins (
+      id text PRIMARY KEY NOT NULL,
+      project_id text NOT NULL,
+      rq_id text NOT NULL,
+      origin_type text NOT NULL CHECK (origin_type IN ('knowledge', 'gap', 'idea')),
+      origin_id text NOT NULL,
+      created_at text NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade,
+      FOREIGN KEY (rq_id) REFERENCES research_questions(id) ON DELETE cascade
+    )
+  `);
+  await client.execute("CREATE UNIQUE INDEX IF NOT EXISTS rq_origins_origin_uniq ON research_question_origins (project_id, origin_type, origin_id)");
+  await client.execute("CREATE INDEX IF NOT EXISTS rq_origins_rq_idx ON research_question_origins (rq_id)");
+  await client.execute("CREATE INDEX IF NOT EXISTS rq_origins_project_idx ON research_question_origins (project_id)");
+  await client.execute({
+    sql: "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+    args: [MIGRATION_0010_HASH, 10],
+  });
+}
+
+// ─── Migration 0011:实验结果导入与分析元数据 ───
+
+const MIGRATION_0011_HASH = "0011_experiment_result_analysis";
+
+async function applyMigration0011(client: Client): Promise<void> {
+  const columns = new Map<string, string>([
+    ["source_type", "text NOT NULL DEFAULT 'manual'"],
+    ["source_name", "text NOT NULL DEFAULT ''"],
+    ["raw_data_json", "text NOT NULL DEFAULT '{}'"],
+    ["normalized_data_json", "text NOT NULL DEFAULT '[]'"],
+    ["mapping_json", "text NOT NULL DEFAULT '{}'"],
+    ["analysis_json", "text NOT NULL DEFAULT ''"],
+    ["analysis_status", "text NOT NULL DEFAULT 'pending'"],
+    ["model", "text"],
+    ["generated_at", "text"],
+  ]);
+  const info = await client.execute("PRAGMA table_info(experiment_results)");
+  const existing = new Set(info.rows.map((row) => String((row as unknown as { name: string }).name)));
+  for (const [name, definition] of columns) {
+    if (!existing.has(name)) await client.execute(`ALTER TABLE experiment_results ADD COLUMN ${name} ${definition}`);
+  }
+  await client.execute({
+    sql: "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+    args: [MIGRATION_0011_HASH, 11],
+  });
+}
+
+// ─── Migration 0012:持久 Research Agent 会话 ───
+
+const MIGRATION_0012_HASH = "0012_research_agent_conversations";
+
+async function applyMigration0012(client: Client): Promise<void> {
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id text PRIMARY KEY NOT NULL,
+      project_id text NOT NULL,
+      title text NOT NULL DEFAULT '新研究对话',
+      mode text NOT NULL DEFAULT 'research_orchestrator',
+      status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled')),
+      created_at text NOT NULL,
+      updated_at text NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
+    );
+    CREATE INDEX IF NOT EXISTS ai_conversations_project_updated_idx ON ai_conversations (project_id, updated_at);
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id text PRIMARY KEY NOT NULL,
+      conversation_id text NOT NULL,
+      project_id text NOT NULL,
+      role text NOT NULL CHECK (role IN ('user', 'assistant')),
+      content text NOT NULL,
+      citations_json text NOT NULL DEFAULT '[]',
+      model text,
+      status text NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled')),
+      error text NOT NULL DEFAULT '',
+      created_at text NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE cascade,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
+    );
+    CREATE INDEX IF NOT EXISTS ai_messages_conversation_created_idx ON ai_messages (conversation_id, created_at);
+    CREATE TABLE IF NOT EXISTS ai_actions (
+      id text PRIMARY KEY NOT NULL,
+      conversation_id text NOT NULL,
+      message_id text NOT NULL,
+      project_id text NOT NULL,
+      tool_name text NOT NULL,
+      input_json text NOT NULL DEFAULT '{}',
+      output_json text NOT NULL DEFAULT '{}',
+      status text NOT NULL CHECK (status IN ('completed', 'failed', 'cancelled')),
+      error text NOT NULL DEFAULT '',
+      created_at text NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE cascade,
+      FOREIGN KEY (message_id) REFERENCES ai_messages(id) ON DELETE cascade,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade
+    );
+    CREATE INDEX IF NOT EXISTS ai_actions_conversation_created_idx ON ai_actions (conversation_id, created_at);
+  `);
+  await client.execute({ sql: "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)", args: [MIGRATION_0012_HASH, 12] });
+}
+
+// ─── Migration 0013:实验分析回挂研究问题结论 ───
+
+const MIGRATION_0013_HASH = "0013_research_question_conclusions";
+
+async function applyMigration0013(client: Client): Promise<void> {
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS research_question_conclusions (
+      id text PRIMARY KEY NOT NULL,
+      project_id text NOT NULL,
+      rq_id text NOT NULL,
+      experiment_id text NOT NULL,
+      result_id text NOT NULL,
+      summary text NOT NULL,
+      support_level text NOT NULL CHECK (support_level IN ('supports', 'partial', 'not_supported', 'insufficient')),
+      limitations_json text NOT NULL DEFAULT '[]',
+      source text NOT NULL DEFAULT 'ai' CHECK (source IN ('human', 'ai')),
+      status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'confirmed')),
+      model text,
+      generated_at text,
+      created_at text NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade,
+      FOREIGN KEY (rq_id) REFERENCES research_questions(id) ON DELETE cascade,
+      FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE cascade,
+      FOREIGN KEY (result_id) REFERENCES experiment_results(id) ON DELETE cascade
+    );
+    CREATE INDEX IF NOT EXISTS rq_conclusions_rq_created_idx ON research_question_conclusions (rq_id, created_at);
+    CREATE INDEX IF NOT EXISTS rq_conclusions_result_idx ON research_question_conclusions (result_id);
+    CREATE INDEX IF NOT EXISTS rq_conclusions_project_idx ON research_question_conclusions (project_id);
+  `);
+  await client.execute({ sql: "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)", args: [MIGRATION_0013_HASH, 13] });
+}
+
+// ─── Migration 0014:研究问题直接关联原子证据 ───
+
+const MIGRATION_0014_HASH = "0014_research_question_evidence";
+
+async function applyMigration0014(client: Client): Promise<void> {
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS research_question_evidence (
+      id text PRIMARY KEY NOT NULL,
+      project_id text NOT NULL,
+      rq_id text NOT NULL,
+      knowledge_item_id text NOT NULL,
+      stance text NOT NULL DEFAULT 'context' CHECK (stance IN ('supports', 'contradicts', 'context')),
+      note text NOT NULL DEFAULT '',
+      created_at text NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE cascade,
+      FOREIGN KEY (rq_id) REFERENCES research_questions(id) ON DELETE cascade,
+      FOREIGN KEY (knowledge_item_id) REFERENCES knowledge_items(id) ON DELETE cascade
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS rq_evidence_rq_item_uniq ON research_question_evidence (rq_id, knowledge_item_id);
+    CREATE INDEX IF NOT EXISTS rq_evidence_project_idx ON research_question_evidence (project_id);
+    CREATE INDEX IF NOT EXISTS rq_evidence_rq_idx ON research_question_evidence (rq_id);
+  `);
+  await client.execute({ sql: "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)", args: [MIGRATION_0014_HASH, 14] });
+}
+
 // ─── Migration runner (逐条执行) ───
 
 /** 本地 file: 库需要 data/ 目录存在。 */
@@ -192,7 +354,7 @@ async function applyMigrationFiles(client: Client, applied: Set<string>): Promis
 }
 
 /**
- * 应用全部迁移(0000-0009)。
+ * 应用全部迁移(0000-0014)。
  * 幂等:多次调用安全(已应用的迁移跳过)。
  */
 export async function migrateDatabase(
@@ -227,6 +389,36 @@ export async function migrateDatabase(
     await applyMigration0009(client);
   }
 
+  // 4) 应用 0010(洞见提升为研究问题的来源关系)
+  if (!applied.has(MIGRATION_0010_HASH)) {
+    console.log("Applying migration 0010_research_question_origins...");
+    await applyMigration0010(client);
+  }
+
+  // 5) 应用 0011(实验结果导入与分析元数据)
+  if (!applied.has(MIGRATION_0011_HASH)) {
+    console.log("Applying migration 0011_experiment_result_analysis...");
+    await applyMigration0011(client);
+  }
+
+  // 6) 应用 0012(持久 Research Agent 会话、消息和动作)
+  if (!applied.has(MIGRATION_0012_HASH)) {
+    console.log("Applying migration 0012_research_agent_conversations...");
+    await applyMigration0012(client);
+  }
+
+  // 7) 应用 0013(实验分析回挂研究问题结论)
+  if (!applied.has(MIGRATION_0013_HASH)) {
+    console.log("Applying migration 0013_research_question_conclusions...");
+    await applyMigration0013(client);
+  }
+
+  // 8) 应用 0014(研究问题直接关联原子证据)
+  if (!applied.has(MIGRATION_0014_HASH)) {
+    console.log("Applying migration 0014_research_question_evidence...");
+    await applyMigration0014(client);
+  }
+
   client.close();
 }
 
@@ -237,5 +429,5 @@ if (isMain) {
   const authToken = process.env.DATABASE_AUTH_TOKEN;
   console.log(`Migrating ${url} ...`);
   await migrateDatabase(url, authToken);
-  console.log("Migration complete (0000-0009).");
+  console.log("Migration complete (0000-0014).");
 }

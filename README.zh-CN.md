@@ -165,7 +165,7 @@ pnpm start         # http://127.0.0.1:8787
 
 ## AI 配置(可选)
 
-你可以在「设置」页直接配置任意 OpenAI 兼容服务(OpenAI / DeepSeek / StepFun / 本地模型等),密钥保存在服务端数据库、永不下发前端。也可以在 `.env` 里配置环境级兜底:
+你可以在「设置」页直接配置任意 OpenAI 兼容服务(OpenAI / DeepSeek / StepFun / 本地模型等)；Base URL 以 `/anthropic` 结尾时会自动使用 Anthropic Messages API。密钥保存在服务端数据库、永不下发前端。也可以在 `.env` 里配置环境级兜底:
 
 ```dotenv
 # 方式一(推荐):JSON 数组,可配多家

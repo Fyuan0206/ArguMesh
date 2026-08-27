@@ -15,9 +15,12 @@ import { gapRoutes } from "./routes/gaps";
 import { ideaRoutes } from "./routes/ideas";
 import { reviewRoutes } from "./routes/reviews";
 import { researchQuestionRoutes } from "./routes/researchQuestions";
+import { researchThreadRoutes } from "./routes/researchThread";
 import { experimentRoutes } from "./routes/experiments";
 import { evidenceLayerRoutes } from "./routes/evidenceLayers";
 import { systemRoutes } from "./routes/system";
+import { conversationRoutes } from "./routes/conversations";
+import { writingRoutes } from "./routes/writing";
 import { getAiProviders } from "./services/ai";
 import type { AppEnv } from "./types";
 
@@ -52,9 +55,12 @@ app.route("/api", gapRoutes);
 app.route("/api", ideaRoutes);
 app.route("/api", reviewRoutes);
 app.route("/api", researchQuestionRoutes);
+app.route("/api", researchThreadRoutes);
 app.route("/api", experimentRoutes);
 app.route("/api", evidenceLayerRoutes);
 app.route("/api", systemRoutes);
+app.route("/api", conversationRoutes);
+app.route("/api", writingRoutes);
 
 app.notFound((c) => c.json({ error: "NOT_FOUND", message: "接口不存在" }, 404));
 app.onError((error, c) => {

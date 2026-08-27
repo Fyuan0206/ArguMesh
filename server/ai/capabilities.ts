@@ -7,12 +7,16 @@ import {
   DRAFT_SYSTEM_PROMPT,
   EXTRACT_SYSTEM_PROMPT,
   EXTRACTION_PLAN_SYSTEM_PROMPT,
+  EXPERIMENT_DESIGN_SYSTEM_PROMPT,
   GAP_DISCOVERY_SYSTEM_PROMPT,
   INTELLIGENCE_SYSTEM_PROMPT,
   MATRIX_EXTRACT_SYSTEM_PROMPT,
   REGENERATE_SYSTEM_PROMPT,
   REVIEW_SYSTEM_PROMPT,
   REVISE_SYSTEM_PROMPT,
+  RESULT_ANALYSIS_SYSTEM_PROMPT,
+  RESEARCH_AGENT_SYSTEM_PROMPT,
+  PAPER_PATCH_SYSTEM_PROMPT,
   readerAskSystem,
   readerSummarySystem,
   readerTranslateSystem,
@@ -99,6 +103,120 @@ export const reviseOutputSchema = z.object({
   method: z.string().max(4_000).default(""),
   experiment: z.string().max(4_000).default(""),
   risks: z.string().max(4_000).default(""),
+});
+
+const shortList = z.array(z.string().min(1).max(500)).max(40).default([]);
+export const ablationDesignSchema = z.object({
+  name: z.string().min(1).max(200),
+  change: z.string().max(1_000).default(""),
+  hypothesis: z.string().max(1_000).default(""),
+  control: z.string().max(1_000).default(""),
+  fixedConditions: shortList,
+  metrics: shortList,
+  expectedDirection: z.string().max(1_000).default(""),
+});
+export const experimentDesignSchema = z.object({
+  objective: z.string().max(2_000).default(""),
+  hypothesis: z.string().max(2_000).default(""),
+  datasets: shortList,
+  baselines: shortList,
+  independentVariables: shortList,
+  dependentVariables: shortList,
+  controlledVariables: shortList,
+  metrics: shortList,
+  procedure: shortList,
+  successCriteria: shortList,
+  risks: shortList,
+  ablations: z.array(ablationDesignSchema).max(20).default([]),
+});
+
+const evidenceRefSchema = z.object({ row: z.number().int().positive(), field: z.string().min(1).max(200) });
+const citedFindingSchema = z.object({
+  claim: z.string().min(1).max(2_000),
+  interpretation: z.string().max(2_000).default(""),
+  evidenceRefs: z.array(evidenceRefSchema).min(1).max(20),
+});
+export const resultAnalysisSchema = z.object({
+  summary: z.string().min(1).max(4_000),
+  findings: z.array(citedFindingSchema).max(30).default([]),
+  ablationFindings: z.array(citedFindingSchema.omit({ interpretation: true })).max(30).default([]),
+  anomalies: z.array(z.object({ description: z.string().min(1).max(2_000), evidenceRefs: z.array(evidenceRefSchema).min(1).max(20) })).max(30).default([]),
+  supportLevel: z.enum(["supports", "partial", "not_supported", "insufficient"]),
+  limitations: shortList,
+  resultsDraft: z.string().max(8_000).default(""),
+});
+
+const agentCitationSchema = z.object({
+  kind: z.enum(["project", "paper", "matrix", "evidence", "insight", "research_question", "experiment", "result"]),
+  id: z.string().min(1).max(200),
+  label: z.string().min(1).max(300),
+});
+const researchQuestionDraftActionSchema = z.object({
+  tool: z.literal("research_question_create_draft"),
+  input: z.object({ question: z.string().min(1).max(2_000), goal: z.string().max(2_000).default("") }),
+});
+const insightDraftActionSchema = z.object({
+  tool: z.literal("insight_create_draft"),
+  input: z.object({
+    type: z.enum(["finding", "contradiction", "gap", "concept"]),
+    title: z.string().min(1).max(200),
+    summary: z.string().min(1).max(4_000),
+    paperId: z.string().max(160).nullable().default(null),
+    evidenceIds: z.array(z.string().min(1).max(160)).max(20).default([]),
+  }),
+});
+const experimentDraftActionSchema = z.object({
+  tool: z.literal("experiment_design_create_draft"),
+  input: z.object({ title: z.string().min(1).max(200), rqId: z.string().max(160).nullable().default(null), design: experimentDesignSchema }),
+});
+const researchQuestionEvidenceActionSchema = z.object({
+  tool: z.literal("research_question_link_evidence"),
+  input: z.object({
+    rqId: z.string().min(1).max(160), evidenceIds: z.array(z.string().min(1).max(160)).min(1).max(30),
+    stance: z.enum(["supports", "contradicts", "context"]).default("context"), note: z.string().max(2_000).default(""),
+  }),
+});
+const ablationAddActionSchema = z.object({
+  tool: z.literal("ablation_design_add"),
+  input: z.object({ experimentId: z.string().min(1).max(160), ablation: ablationDesignSchema }),
+});
+const paperPatchActionSchema = z.object({
+  tool: z.literal("paper_patch_propose"),
+  input: z.object({
+    summary: z.string().min(1).max(2_000),
+    proposedSource: z.string().min(1).max(500_000),
+    baseVersion: z.string().length(64),
+    warnings: z.array(z.string().max(1_000)).max(50).default([]),
+  }),
+});
+const resultAnalysisDraftActionSchema = z.object({
+  tool: z.literal("result_analysis_create_draft"),
+  input: z.object({ experimentId: z.string().min(1).max(160), resultId: z.string().min(1).max(160), analysis: resultAnalysisSchema }),
+});
+const bibliographyProposalActionSchema = z.object({
+  tool: z.literal("bibliography_entry_propose"),
+  input: z.object({
+    citationKey: z.string().regex(/^[A-Za-z0-9_:.+-]+$/).max(120),
+    entry: z.string().min(1).max(20_000),
+    baseVersion: z.string().length(64),
+  }),
+});
+const latexCompileActionSchema = z.object({ tool: z.literal("latex_compile"), input: z.object({}).default({}) });
+export const researchAgentOutputSchema = z.object({
+  mode: z.enum(["evidence_analyst", "research_framer", "experiment_designer", "result_analyst", "manuscript_writer", "latex_fixer"]),
+  reply: z.string().min(1).max(12_000),
+  citations: z.array(agentCitationSchema).max(30).default([]),
+  action: z.discriminatedUnion("tool", [
+    insightDraftActionSchema, researchQuestionDraftActionSchema, researchQuestionEvidenceActionSchema,
+    experimentDraftActionSchema, ablationAddActionSchema, resultAnalysisDraftActionSchema,
+    paperPatchActionSchema, bibliographyProposalActionSchema, latexCompileActionSchema,
+  ]).nullable().default(null),
+});
+export const paperPatchOutputSchema = z.object({
+  summary: z.string().min(1).max(2_000),
+  proposedSource: z.string().min(1).max(500_000),
+  citations: z.array(agentCitationSchema).max(50).default([]),
+  warnings: z.array(z.string().max(1_000)).max(50).default([]),
 });
 
 // ───────────────────────── 纯文本预处理（无 DB，capability 内聚） ─────────────────────────
@@ -261,6 +379,79 @@ export async function reviseIdea(
     system: REVISE_SYSTEM_PROMPT, user: userContent,
     providerConfig: opts.providerConfig, model: opts.model,
     maxTokens: 3_000, retryMaxTokens: 4_000, timeoutMs: 90_000, retryTimeoutMs: 120_000,
+  });
+}
+
+/** 研究问题与证据摘要 → 结构化主实验和消融实验设计。 */
+export async function designExperiment(
+  env: AppBindings,
+  opts: AiOpts & {
+    researchQuestion: { question: string; goal: string };
+    evidence: Array<{ title: string; content: string; source: string }>;
+    constraints?: string;
+  },
+) {
+  return completeJson(env, experimentDesignSchema, {
+    system: EXPERIMENT_DESIGN_SYSTEM_PROMPT,
+    user: JSON.stringify({ 研究问题: opts.researchQuestion, 项目证据摘要: opts.evidence, 用户约束: opts.constraints ?? "" }),
+    providerConfig: opts.providerConfig,
+    model: opts.model,
+    maxTokens: 4_000,
+    retryMaxTokens: 6_000,
+    timeoutMs: 120_000,
+    retryTimeoutMs: 150_000,
+  });
+}
+
+/** 用户导入的真实数据 → 每条判断都带 row/field 引用的结果分析。 */
+export async function analyzeExperimentResult(
+  env: AppBindings,
+  opts: AiOpts & { design: z.infer<typeof experimentDesignSchema>; rows: Array<Record<string, unknown>> },
+) {
+  const numberedRows = opts.rows.slice(0, 500).map((row, index) => ({ row: index + 1, ...row }));
+  return completeJson(env, resultAnalysisSchema, {
+    system: RESULT_ANALYSIS_SYSTEM_PROMPT,
+    user: JSON.stringify({ 实验设计: opts.design, 真实结果数据: numberedRows }),
+    providerConfig: opts.providerConfig,
+    model: opts.model,
+    maxTokens: 4_000,
+    retryMaxTokens: 6_000,
+    timeoutMs: 120_000,
+    retryTimeoutMs: 150_000,
+  });
+}
+
+/** 项目上下文 + 历史消息 → 一次有界 Research Agent 回合。 */
+export async function runResearchAgentTurn(
+  env: AppBindings,
+  opts: AiOpts & { context: unknown; history: Array<{ role: "user" | "assistant"; content: string }>; message: string },
+) {
+  return completeJson(env, researchAgentOutputSchema, {
+    system: RESEARCH_AGENT_SYSTEM_PROMPT,
+    user: JSON.stringify({ projectContext: opts.context, recentConversation: opts.history.slice(-12), userMessage: opts.message }),
+    providerConfig: opts.providerConfig,
+    model: opts.model,
+    maxTokens: 4_000,
+    retryMaxTokens: 6_000,
+    timeoutMs: 120_000,
+    retryTimeoutMs: 150_000,
+  });
+}
+
+/** 论文全文 + 项目证据 → 不落盘的 LaTeX 修改提案。 */
+export async function proposePaperPatch(
+  env: AppBindings,
+  opts: AiOpts & { context: unknown; source: string; instruction: string; selection?: { start: number; end: number } },
+) {
+  return completeJson(env, paperPatchOutputSchema, {
+    system: PAPER_PATCH_SYSTEM_PROMPT,
+    user: JSON.stringify({ projectContext: opts.context, currentMainTex: opts.source, instruction: opts.instruction, selection: opts.selection ?? null }),
+    providerConfig: opts.providerConfig,
+    model: opts.model,
+    maxTokens: 8_000,
+    retryMaxTokens: 12_000,
+    timeoutMs: 150_000,
+    retryTimeoutMs: 180_000,
   });
 }
 

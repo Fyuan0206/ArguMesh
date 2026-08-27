@@ -21,5 +21,6 @@ export function loadBindings(): AppBindings {
     STEPFUN_MODEL: process.env.STEPFUN_MODEL,
     AI_MODELS: process.env.AI_MODELS,
     AI_PROVIDERS: process.env.AI_PROVIDERS,
+    LATEX_ENGINE_PATH: process.env.LATEX_ENGINE_PATH,
   };
 }

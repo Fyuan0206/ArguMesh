@@ -185,7 +185,7 @@ Hono 4 + @hono/node-server            API (plain Node process, no cloud bindings
 libSQL / SQLite + Drizzle ORM         all data (including PDFs) in one local file
 (no auth)                                 single-user, no accounts, no native dependencies
 pdfjs-dist + tesseract.js             in-browser PDF rendering + OCR
-Any OpenAI-compatible API             AI extraction / reader Q&A / Paper Card (optional)
+OpenAI- or Anthropic-compatible API   AI extraction / reader Q&A / Paper Card (optional)
 ```
 
 ## Project structure

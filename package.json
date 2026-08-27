@@ -18,8 +18,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:backup": "tsx scripts/backup-database.ts",
     "db:studio": "drizzle-kit studio",
-    "test": "vitest run --config vitest.config.ts",
-    "test:watch": "vitest --config vitest.config.ts"
+    "test": "node ./node_modules/vitest/vitest.mjs run --config vitest.config.ts",
+    "test:watch": "node ./node_modules/vitest/vitest.mjs --config vitest.config.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.0",

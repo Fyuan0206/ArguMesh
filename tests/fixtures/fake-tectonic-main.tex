@@ -1,0 +1,7 @@
+const { writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+
+const outIndex = process.argv.indexOf("--outdir");
+const outDir = outIndex >= 0 ? process.argv[outIndex + 1] : process.cwd();
+writeFileSync(join(outDir, "main.pdf"), "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
+console.log("fake tectonic compiled main.pdf");
