@@ -218,7 +218,10 @@ interface WorkspaceData {
 }
 
 export type NewPaperInput = Pick<LocalPaper, "title" | "authors" | "venue" | "year" | "projectIds"> &
-  Partial<Pick<LocalPaper, "abstract" | "doi" | "arxivId" | "sourceUrl" | "fileHash" | "fileName" | "fileSize" | "pageCount" | "outline">>;
+  Partial<Pick<LocalPaper, "abstract" | "doi" | "arxivId" | "sourceUrl" | "fileHash" | "fileName" | "fileSize" | "pageCount" | "outline" | "tags">> & {
+  /** 服务端已创建的论文 ID(如同步 literature/ 扫描结果)时传入,保持本地与云端一致。 */
+  id?: string;
+};
 
 interface WorkspaceContextValue extends WorkspaceData {
   addProject: (input: Pick<LocalProject, "name" | "description" | "workspacePath">) => string;
@@ -518,6 +521,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
     },
     addPaper(input) {
+      const { id: requestedId, tags: inputTags, ...rest } = input;
+      if (requestedId) {
+        const existingById = data.papers.find((paper) => paper.id === requestedId);
+        if (existingById) {
+          setData((current) => ({
+            ...current,
+            papers: current.papers.map((paper) => paper.id === requestedId
+              ? {
+                ...paper,
+                ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined && value !== "")),
+                projectIds: [...new Set([...paper.projectIds, ...input.projectIds])],
+                tags: inputTags?.length ? [...new Set([...paper.tags, ...inputTags])] : paper.tags,
+              }
+              : paper),
+            projects: current.projects.map((project) => input.projectIds.includes(project.id) && !project.paperIds.includes(requestedId)
+              ? { ...project, paperIds: [...project.paperIds, requestedId] }
+              : project),
+          }));
+          return requestedId;
+        }
+      }
       const canonicalTitle = input.title.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ");
       const duplicate = data.papers.find((paper) =>
         (input.fileHash && paper.fileHash === input.fileHash)
@@ -529,7 +553,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setData((current) => ({
           ...current,
           papers: current.papers.map((paper) => paper.id === duplicate.id
-            ? { ...paper, ...Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined && value !== "")), projectIds: [...new Set([...paper.projectIds, ...input.projectIds])] }
+            ? { ...paper, ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined && value !== "")), projectIds: [...new Set([...paper.projectIds, ...input.projectIds])], tags: inputTags?.length ? [...new Set([...paper.tags, ...inputTags])] : paper.tags }
             : paper),
           projects: current.projects.map((project) => input.projectIds.includes(project.id) && !project.paperIds.includes(duplicate.id)
             ? { ...project, paperIds: [...project.paperIds, duplicate.id] }
@@ -537,7 +561,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }));
         return duplicate.id;
       }
-      const paper: LocalPaper = { id: createId("paper"), ...input, status: "待读", tags: [], favorite: false };
+      const paper: LocalPaper = { id: requestedId ?? createId("paper"), ...rest, status: "待读", tags: inputTags ?? [], favorite: false, projectIds: input.projectIds };
       setData((current) => ({
         ...current,
         papers: [paper, ...current.papers],

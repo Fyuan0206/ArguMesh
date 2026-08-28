@@ -38,6 +38,23 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 ### 文献库
 按 DOI / arXiv / URL 导入文献(自动获取元数据),或批量上传 PDF(单文件 ≤ 25 MB)。支持阅读状态(待读 → 粗读 → 精读 → 核心文献)、收藏、标签与项目内笔记。
 
+**文件夹同步(`literature/` 收件箱)** — 若项目已绑定本地工作文件夹(`workspacePath`),可将 PDF 放入固定子目录,在文献库一键导入:
+
+```text
+你的项目文件夹/
+├── paper/              ← LaTeX 写作(main.tex、references.bib)
+├── literature/         ← 把 PDF 放这里,再到文献库点「同步」
+└── .argumesh/          ← 内部快照(由 ArguMesh 管理)
+```
+
+1. 创建或编辑项目时绑定工作文件夹(原生文件夹选择器)。
+2. 将 PDF 放入 `{workspacePath}/literature/`(当前仅扫描该目录下一层,不递归子文件夹)。
+3. 打开该项目的 **文献** 页,点击 **「同步 literature/」**。
+
+服务端从磁盘读取 PDF,按文件哈希(SHA-256)去重,将元数据与 PDF 本体写入本地数据库并关联到当前项目。再次同步会跳过已在项目中的文献;其他项目已导入的同一文件会关联到当前项目,不会重复存盘。**从文件夹删除 PDF 不会删除文献库记录**(证据矩阵等关联保留)。限制:每次同步最多 50 个文件,单文件 ≤ 25 MB。
+
+API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePath`)。
+
 <img src="./docs/screenshots/library.png" alt="文献库：论文列表、阅读状态与 Paper Card 入口" width="900" />
 
 ### PDF 阅读器:结构化标注
@@ -51,7 +68,7 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 <img src="./docs/screenshots/paper-card.png" alt="Paper Card：研究问题、方法、数据与发现的结构化卡片" width="900" />
 
 ### 证据矩阵(核心)
-论文为列 × 研究维度为行。AI 提取逐格填入证据、置信度与来源位置(页码 + 摘录);然后人工核验:标记「原文一致」「需要修订」或「标记冲突」,可信的格子「确认并锁定」。锁定的格子不会被批量 AI 运行静默覆盖。
+论文为列 × 研究维度为行。AI 提取逐格填入证据、置信度与来源位置(页码 + 摘录);然后人工核验:标记「原文一致」「需要修订」或「标记冲突」,可信的格子「确认并锁定」。锁定的格子不会被批量 AI 运行静默覆盖。文献较多(如 50 篇以上)时,矩阵以**横向滚动**展示,左侧研究维度列固定,列宽按篇数自动收窄;可用顶栏搜索框筛选论文。
 
 <img src="./docs/screenshots/matrix.png" alt="证据矩阵：论文 × 研究维度，单元格可回溯到原文" width="900" />
 
@@ -75,6 +92,8 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 ### 论文写作(LaTeX)
 为项目绑定本地工作文件夹,编辑 `main.tex` / `references.bib`,保留快照,接受前先审阅 AI Diff;可选调用本机 Tectonic 或 latexmk 编译并预览真实 PDF。危险命令会被拦截;接受正文 Diff 后可自动编译,编译问题可再生成修复 Diff。
 
+同一 `workspacePath` 下还有可选的 **`literature/` PDF 收件箱**(见[文献库](#文献库)):写作源文件在 `paper/`,待导入 PDF 放在 `literature/`。
+
 ### 全局搜索与任务中心
 一个搜索框覆盖全部项目与文献。每个长耗时 AI 任务展示范围、模型、进度与结果,可取消。
 
@@ -91,7 +110,7 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 
 | 常见问题 | ArguMesh 的处理方式 |
 | --- | --- |
-| 论文分散在文件夹、浏览器和笔记软件中,难以按课题管理 | 用 Project 隔离课题与文献,支持搜索、筛选与标签 |
+| 论文分散在文件夹、浏览器和笔记软件中,难以按课题管理 | 用 Project 隔离课题与文献,支持搜索、筛选与标签;绑定工作区后 **`literature/` 文件夹同步** 可免上传批量导入 PDF |
 | 阅读论文容易停留在划线和摘要,后续无法复用 | 在 PDF 阅读器中把选区保存为 Note、Claim 或 Evidence,保留论文与页码 |
 | 直接向 AI 上传整篇论文,答案范围不透明 | 阅读问答只提交用户主动选择的原文、页码和问题 |
 | 多篇论文靠手工表格横向比较,维度不统一、证据出处易丢失 | 证据矩阵以论文为列、研究维度为行,证据可核验、确认、锁定或标记冲突 |
@@ -171,6 +190,10 @@ AI_PROVIDERS=[{"id":"stepfun","label":"StepFun","baseUrl":"https://api.stepfun.c
 
 ## 更新记录
 
+### v3.2.1（2026-08）— 文献文件夹同步
+- **`literature/` 收件箱**:绑定项目工作区后,将 PDF 放入 `{workspacePath}/literature/`,在文献库点击 **「同步 literature/」** 即可导入数据库(哈希去重,每次 ≤ 50 篇,单文件 ≤ 25 MB)。API:`POST /api/projects/:projectId/library/scan-inbox`。
+- **证据矩阵(文献较多)**:15 篇以上时使用固定列宽 + 横向滚动 + 左侧维度列固定;下方核验区不随矩阵横向撑宽;**AI 提取**会回退读取数据库中的 PDF(如 `literature/` 同步后),按每批 3 篇提交,容忍 AI 返回 null/超长字段,单篇失败不中断整批。
+
 ### v3.2.0（2026-08）— 研究工作台收敛
 当前发布版本（与 `package.json` 的 `3.2.0` 一致）。
 
@@ -205,7 +228,10 @@ AI_PROVIDERS=[{"id":"stepfun","label":"StepFun","baseUrl":"https://api.stepfun.c
 ## 数据与备份
 
 - 数据库:`data/argumesh.db`(SQLite / libSQL 文件),项目、文献、证据、研究脉络、实验、AI 会话与 PDF(BLOB,单文件 ≤ 25 MB)都在这里
-- 论文源文件:绑定到项目的本地文件夹(`workspacePath` 下的 `main.tex`、`references.bib` 与资源)
+- 项目工作区(可选,磁盘上的 `workspacePath`):
+  - `paper/` — LaTeX 源文件(`main.tex`、`references.bib`、figures),供论文写作
+  - `literature/` — PDF 收件箱,文献库一键同步(见[文献库](#文献库))
+  - `.argumesh/` — 论文快照(由 ArguMesh 管理)
 - 备份:`pnpm run db:backup` 导出全库 JSON 快照到 `backups/`;前端「设置」页也支持工作区 JSON 导出/恢复
 
 ## 技术栈
@@ -230,7 +256,7 @@ server/            # Hono API(node.ts 入口;routes/ 按模块划分)
                    # card / reader / knowledge / researchQuestions / gaps / ideas /
                    # reviews / experiments / evidenceLayers / researchThread /
                    # conversations / writing / ai / system
-  services/        # research-agent、latex、paper-files、project-context 等
+  services/        # research-agent、latex、paper-files、literature-inbox、project-context 等
 scripts/           # seed、migrate、migrate-custom、backup
 drizzle/           # SQL 迁移(0000–0007;单用户化由 migrate-custom 处理)
 tests/unit/        # 前端单元测试(happy-dom)
@@ -257,6 +283,10 @@ API 测试直连 Hono 应用并为每个测试文件创建独立的临时 SQLite
 </p>
 
 > 微信群二维码会定期失效。若上方二维码过期,请开 Issue 或查看 README 的最新更新。
+
+## 参考项目
+
+产品与路线图对照（摘要 + 链接,未内置源码）:**[docs/reference-projects.md](./docs/reference-projects.md)** — [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep)、[karpathy/autoresearch](https://github.com/karpathy/autoresearch)、[pi-autoresearch](https://github.com/davebcn87/pi-autoresearch)、[Mimir](https://github.com/1692775560/Mimir)。
 
 ## License
 

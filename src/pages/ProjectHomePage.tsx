@@ -1,9 +1,10 @@
-import { ArrowRight, BookOpenText, Brain, CaretDown, ChatCircleDots, ClockCounterClockwise, Flask, FolderSimple, GitBranch, GridFour, PaperPlaneTilt, Plus, Stop, Wrench } from "@phosphor-icons/react";
+import { ArrowRight, BookOpenText, Brain, CaretDown, ChatCircleDots, ClockCounterClockwise, Flask, FolderSimple, GitBranch, GridFour, PaperPlaneTilt, Plus, Stop, Trash, Wrench } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   cancelAiConversation,
   createAiConversation,
+  deleteAiConversation,
   getAiConversation,
   getResearchThread,
   listAiConversations,
@@ -91,6 +92,24 @@ export function ProjectHomePage() {
     await cancelAiConversation(projectId, activeId);
     setConversations((items) => items.map((item) => item.id === activeId ? { ...item, status: "cancelled" } : item));
   }
+  async function removeConversation(conversationId: string) {
+    if (!projectId || !window.confirm("确定删除该会话？消息与动作记录将一并清除。")) return;
+    await deleteAiConversation(projectId, conversationId);
+    const remaining = conversations.filter((item) => item.id !== conversationId);
+    if (!remaining.length) {
+      const created = await createAiConversation(projectId);
+      setConversations([created.conversation]);
+      setActiveId(created.conversation.id);
+      setMessages([]);
+      setActions([]);
+      setMode("research_orchestrator");
+      return;
+    }
+    setConversations(remaining);
+    if (activeId === conversationId) {
+      await loadConversation(projectId, remaining[0].id);
+    }
+  }
   async function submitContent(content: string) {
     if (!projectId || !activeId || !content.trim() || sending || active?.status === "cancelled") return;
     const optimistic: AiMessage = {
@@ -120,16 +139,29 @@ export function ProjectHomePage() {
           <div className="agent-breadcrumb"><span>项目</span><ArrowRight /><strong>Research Agent</strong><span>会话 · {active?.title ?? "新研究对话"}</span></div>
           <div className="agent-title-row"><h1>{project.name}</h1><span className="agent-project-state">研究中</span></div>
         </div>
-        <div className="agent-session-controls">
-          <button className="agent-new-conversation" onClick={newConversation}><ChatCircleDots />新对话</button>
+        <div className="agent-session-controls" role="group" aria-label="会话操作">
+          <button type="button" className="agent-new-conversation" onClick={newConversation}><ChatCircleDots weight="bold" />新对话</button>
           <details className="agent-history-menu">
-            <summary><ClockCounterClockwise />历史记录<CaretDown /></summary>
+            <summary aria-label={`历史记录，共 ${conversations.length} 条`}>
+              <ClockCounterClockwise weight="bold" />历史记录
+              <span className="agent-history-count" aria-hidden="true">{conversations.length}</span>
+              <CaretDown />
+            </summary>
             <div className="agent-history-popover" role="menu">
               <header><strong>项目会话</strong><span>{conversations.length} 条</span></header>
-              {conversations.map((conversation) => <button type="button" role="menuitem" className={conversation.id === activeId ? "active" : ""} key={conversation.id} onClick={(event) => {
-                if (projectId) void loadConversation(projectId, conversation.id);
-                event.currentTarget.closest("details")?.removeAttribute("open");
-              }}><span>{conversation.title}</span><small>{conversation.status === "cancelled" ? "已结束" : new Date(conversation.updatedAt).toLocaleDateString()}</small></button>)}
+              {conversations.length === 0 ? <p className="agent-history-empty">暂无会话</p> : null}
+              {conversations.map((conversation) => (
+                <div className={`agent-history-row${conversation.id === activeId ? " active" : ""}`} role="menuitem" key={conversation.id}>
+                  <button type="button" className="agent-history-open" onClick={(event) => {
+                    if (projectId) void loadConversation(projectId, conversation.id);
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                  }}><span>{conversation.title}</span><small>{conversation.status === "cancelled" ? "已结束" : new Date(conversation.updatedAt).toLocaleDateString()}</small></button>
+                  <button type="button" className="agent-history-delete" aria-label={`删除会话：${conversation.title}`} title="删除会话" onClick={(event) => {
+                    event.stopPropagation();
+                    void removeConversation(conversation.id);
+                  }}><Trash weight="bold" /></button>
+                </div>
+              ))}
             </div>
           </details>
         </div>
@@ -170,7 +202,10 @@ export function ProjectHomePage() {
         <div className="agent-composer-box"><textarea name="message" required disabled={sending || active?.status === "cancelled"} placeholder={active?.status === "cancelled" ? "该会话已结束，请新建对话" : "询问项目证据、形成研究问题、设计实验或分析真实结果…"} onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
         }} /><button className="primary" disabled={sending || active?.status === "cancelled"} aria-label="发送"><PaperPlaneTilt /></button></div>
-        <div className="agent-composer-meta"><span>单回合：最多 1 个受限动作 · 项目上下文有界</span>{active?.status === "active" ? <button type="button" onClick={stopConversation}><Stop />结束会话</button> : null}</div>
+        <div className="agent-composer-meta">
+          <span>单回合：最多 1 个受限动作 · 项目上下文有界</span>
+          {active?.status === "active" ? <button type="button" className="agent-end-session" onClick={stopConversation}><Stop weight="bold" />结束会话</button> : null}
+        </div>
       </form>
     </section>
 

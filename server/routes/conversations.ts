@@ -94,3 +94,17 @@ conversationRoutes.post("/projects/:projectId/ai/conversations/:conversationId/c
   await db.update(aiMessages).set({ status: "cancelled", error: "用户取消" }).where(and(eq(aiMessages.conversationId, conversationId), eq(aiMessages.status, "pending")));
   return c.json({ id: conversationId, status: "cancelled" });
 });
+
+/** 永久删除会话及其消息/动作(SQLite 默认不强制 FK cascade,显式清理)。 */
+conversationRoutes.delete("/projects/:projectId/ai/conversations/:conversationId", async (c) => {
+  const projectId = c.req.param("projectId");
+  const conversationId = c.req.param("conversationId");
+  const db = createDatabase(c.env);
+  const conversation = await db.select({ id: aiConversations.id }).from(aiConversations)
+    .where(and(eq(aiConversations.id, conversationId), eq(aiConversations.projectId, projectId))).get();
+  if (!conversation) return c.json({ error: "CONVERSATION_NOT_FOUND" }, 404);
+  await db.delete(aiActions).where(eq(aiActions.conversationId, conversationId));
+  await db.delete(aiMessages).where(eq(aiMessages.conversationId, conversationId));
+  await db.delete(aiConversations).where(eq(aiConversations.id, conversationId));
+  return c.json({ id: conversationId, deleted: true });
+});

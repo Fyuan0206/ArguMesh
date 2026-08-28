@@ -159,7 +159,7 @@ export function WritingPage() {
     </aside>
 
     <main className="latex-editor-pane">
-      <header><div><strong>{file}</strong>{dirty ? <span className="unsaved-dot">未保存</span> : <span>已同步</span>}</div><button className="primary" disabled={!dirty || busy === "save"} onClick={() => save()}><FloppyDisk />保存</button></header>
+      <header className="latex-editor-toolbar"><div className="latex-file-state"><strong>{file}</strong>{dirty ? <span className="unsaved-dot">未保存</span> : <span>已同步</span>}</div><button className="primary" disabled={!dirty || busy === "save"} onClick={() => save()}><FloppyDisk />保存</button></header>
       {error ? <div className="route-banner route-banner-warning" role="status">{error}</div> : null}
       {patch ? <section className="latex-diff" aria-label="AI 修改 Diff">
         <header><div><span>AI DIFF</span><strong>{patch.data.summary}</strong></div><div><button className="outline" onClick={() => setPatch(null)}><X />拒绝</button><button className="primary" onClick={acceptPatch}><Check />接受并创建快照</button></div></header>

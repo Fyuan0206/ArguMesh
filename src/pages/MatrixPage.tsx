@@ -27,8 +27,8 @@ import {
 } from "../api";
 import { useProject } from "../state/project";
 import { useWorkspace, type LocalMatrix } from "../state/workspace";
-import { getPaperPdf } from "../storage/paperFiles";
 import { extractPdfText } from "../pdf/document";
+import { resolvePaperPdf } from "../pdf/resolvePaperPdf";
 
 interface Selection {
   rowId: string;
@@ -151,7 +151,8 @@ export function MatrixPage() {
     workspace.updateTask(taskId, { status: "running", progress: 10 });
     setExtracting(true);
     setLoadError("");
-    setAiMessage("正在读取 PDF 文本并提取逐格证据…");
+    setAiMessage("正在从本地或数据库读取 PDF…");
+    const extractionBatchSize = 3;
     try {
       const papers = localMatrix
         ? localMatrix.paperIds.flatMap((paperId) => {
@@ -161,18 +162,52 @@ export function MatrixPage() {
         : (data?.papers ?? []);
       const dimensions = localMatrix ? localMatrix.dimensions : (data?.groups.flatMap((group) => group.rows) ?? []);
       const pdfPapers = [];
+      const missingPdf: string[] = [];
       for (const paper of papers) {
-        const blob = await getPaperPdf(paper.id);
-        if (!blob) continue;
+        const workspacePaper = workspace.papers.find((item) => item.id === paper.id);
+        const blob = await resolvePaperPdf(paper.id, workspacePaper?.fileName);
+        if (!blob) {
+          missingPdf.push(paper.title);
+          continue;
+        }
         // 文本上限 15K/篇:60 页×6000 字会让 StepFun 推理逼近 55s 超时(生产 502,2026-08-14);
         // 15K(约 20–30 页)已足以覆盖各维度证据来源。
         pdfPapers.push({ id: paper.id, title: paper.title, pages: (await extractPdfText(blob, paper.id, { maxPages: 60, maxChars: 15_000 })).map(({ page, text }) => ({ page, text })) });
       }
-      if (!pdfPapers.length) throw new Error("所选论文尚未上传可读取的 PDF");
-      const result = await extractMatrix(matrixId, { papers: pdfPapers, dimensions });
-      setAiMessage(result.status === "completed" ? `已提取 ${result.updated}/${result.total ?? 0} 个证据单元格` : result.message ?? "没有待提取单元格");
-      setProgress(result.progress ?? 0);
-      workspace.updateTask(taskId, { status: "completed", progress: 100, detail: `完成 ${result.updated}/${result.total ?? 0} 个证据单元格` });
+      if (!pdfPapers.length) {
+        throw new Error("所选论文尚未上传可读取的 PDF（文献库同步的 PDF 在数据库中，请确认 API 已启动并重试）");
+      }
+      if (missingPdf.length) {
+        setAiMessage(`已读取 ${pdfPapers.length} 篇 PDF，跳过 ${missingPdf.length} 篇无文件文献…`);
+      } else {
+        setAiMessage("正在提取逐格证据…");
+      }
+      let totalUpdated = 0;
+      let totalSkipped = 0;
+      let lastProgress = 0;
+      const batchFailures: string[] = [];
+      for (let offset = 0; offset < pdfPapers.length; offset += extractionBatchSize) {
+        const batch = pdfPapers.slice(offset, offset + extractionBatchSize);
+        const batchEnd = Math.min(offset + extractionBatchSize, pdfPapers.length);
+        setAiMessage(`正在提取第 ${offset + 1}–${batchEnd} / ${pdfPapers.length} 篇论文…`);
+        try {
+          const result = await extractMatrix(matrixId, { papers: batch, dimensions });
+          totalUpdated += result.updated ?? 0;
+          totalSkipped += result.skipped ?? 0;
+          lastProgress = result.progress ?? lastProgress;
+          setProgress(lastProgress);
+        } catch (batchError) {
+          batchFailures.push(batchError instanceof Error ? batchError.message : "批次失败");
+        }
+      }
+      if (!totalUpdated && batchFailures.length) {
+        throw new Error(batchFailures[0]);
+      }
+      const skipNote = totalSkipped || missingPdf.length || batchFailures.length
+        ? `（跳过 ${totalSkipped + missingPdf.length + batchFailures.length * extractionBatchSize} 篇异常/无 PDF）`
+        : "";
+      setAiMessage(`已提取 ${totalUpdated} 个证据单元格${skipNote}`);
+      workspace.updateTask(taskId, { status: "completed", progress: 100, detail: `完成 ${totalUpdated} 个证据单元格` });
       await loadMatrix();
     } catch (error) {
       workspace.updateTask(taskId, { status: "failed", progress: 0, detail: error instanceof Error ? error.message : "AI 证据提取失败" });
@@ -211,32 +246,14 @@ export function MatrixPage() {
 
   function openSource() {
     if (!selectedPaper?.hasFile) return;
-    if (localMatrix) {
-      void getPaperPdf(selectedPaper.id).then((blob) => {
-        if (!blob) throw new Error("当前浏览器中没有找到该 PDF");
+    void resolvePaperPdf(selectedPaper.id, selectedPaper.title)
+      .then((blob) => {
+        if (!blob) throw new Error("当前浏览器与数据库中均未找到该 PDF");
         const url = URL.createObjectURL(blob);
         window.open(url, "_blank", "noopener,noreferrer");
         window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      }).catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "打开 PDF 失败"));
-      return;
-    }
-    void fetch(`/api/papers/${encodeURIComponent(selectedPaper.id)}/file`)
-      .then(async (response) => {
-        if (!response.ok) {
-          let message = "打开 PDF 失败";
-          try {
-            const payload = (await response.json()) as { message?: string };
-            if (payload.message) message = payload.message;
-          } catch { /* 非 JSON 响应,保留默认消息 */ }
-          throw new Error(message);
-        }
-        const url = URL.createObjectURL(await response.blob());
-        window.open(url, "_blank", "noopener,noreferrer");
-        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       })
-      .catch((error: unknown) => {
-        setLoadError(error instanceof Error ? error.message : "打开 PDF 失败");
-      });
+      .catch((error: unknown) => setLoadError(error instanceof Error ? error.message : "打开 PDF 失败"));
   }
 
   function onToggleSidebar() {
@@ -244,7 +261,11 @@ export function MatrixPage() {
     window.dispatchEvent(new CustomEvent("paperidea:toggle-sidebar"));
   }
 
-  const paperCountStyle = { "--paper-count": visiblePapers.length } as CSSProperties;
+  const paperColWidth = visiblePapers.length > 30 ? 120 : visiblePapers.length > 15 ? 140 : 160;
+  const paperCountStyle = {
+    "--paper-count": visiblePapers.length,
+    "--paper-col-width": `${paperColWidth}px`,
+  } as CSSProperties;
 
   return (
     <>
@@ -287,11 +308,11 @@ export function MatrixPage() {
               />
             ) : null}
             {!loading && data ? (
-              <>
-                <div className="matrix-grid matrix-header" style={paperCountStyle}>
+              <div className="matrix-table" style={paperCountStyle}>
+                <div className="matrix-grid matrix-header">
                   <div className="dimension-head">研究维度</div>
                   {visiblePapers.map((paper) => (
-                    <div className="paper-head" key={paper.id}>
+                    <div className="paper-head" key={paper.id} title={paper.title}>
                       <strong>{paper.name}</strong>
                       <span>{paper.venue} {paper.year}</span>
                     </div>
@@ -312,7 +333,7 @@ export function MatrixPage() {
                       </button>
                       {!collapsed[group.id] &&
                         group.rows.map((row) => (
-                          <div className="matrix-grid matrix-row" style={paperCountStyle} key={row.id}>
+                          <div className="matrix-grid matrix-row" key={row.id}>
                             <div className="row-label">{row.label}</div>
                             {visiblePapers.map((paper) => {
                               const cell = data.cells[`${row.id}:${paper.id}`];
@@ -342,7 +363,7 @@ export function MatrixPage() {
                     </div>
                   ))
                 )}
-              </>
+              </div>
             ) : null}
           </div>
         </section>

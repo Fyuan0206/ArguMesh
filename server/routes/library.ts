@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
 import { papers, projectPapers, projects } from "../db/schema";
+import { LITERATURE_INBOX_DIR, scanLiteratureInbox } from "../services/literature-inbox";
+import { PaperWorkspaceError } from "../services/paper-files";
 import type { AppEnv } from "../types";
 
 const paperSchema = z.object({
@@ -95,6 +97,20 @@ async function fetchPublicHtml(initialUrl: URL) {
   }
   throw new Error("论文链接重定向次数过多");
 }
+
+libraryRoutes.post("/projects/:projectId/library/scan-inbox", async (c) => {
+  const projectId = c.req.param("projectId");
+  try {
+    const result = await scanLiteratureInbox(c.env, projectId);
+    return c.json(result);
+  } catch (error) {
+    if (error instanceof PaperWorkspaceError) {
+      const status = error.code === "PROJECT_NOT_FOUND" ? 404 : 400;
+      return c.json({ error: error.code, message: error.message, inboxDir: LITERATURE_INBOX_DIR }, status);
+    }
+    throw error;
+  }
+});
 
 libraryRoutes.post("/literature/resolve", async (c) => {
   const parsed = importSchema.safeParse(await c.req.json().catch(() => null));

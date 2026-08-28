@@ -50,7 +50,7 @@ function AppShell() {
   return (
     <main className={`app-shell ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
       <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen((open) => !open)} />
-      <section className={`workspace ${isMatrix || isReader ? "" : "route-workspace"} ${isReader ? "reader-workspace" : ""}`}>
+      <section className={`workspace ${isMatrix ? "matrix-workspace" : isReader ? "reader-workspace" : "route-workspace"}`}>
         <Outlet />
       </section>
     </main>

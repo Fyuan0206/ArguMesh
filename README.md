@@ -40,6 +40,23 @@ The project home is a persistent Research Agent: multi-turn conversations with p
 ### Literature library
 Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 核心文献), favorites, tags, and per-project notes.
 
+**Folder sync (`literature/` inbox)** — if the project has a bound local workspace folder (`workspacePath`), you can drop PDFs into a fixed subfolder and import them in one click:
+
+```text
+your-project-folder/
+├── paper/              ← LaTeX writing (main.tex, references.bib)
+├── literature/         ← drop PDFs here, then sync from the library page
+└── .argumesh/          ← internal snapshots (managed by ArguMesh)
+```
+
+1. Bind a workspace when creating or editing the project (native folder picker).
+2. Put PDF files in `{workspacePath}/literature/` (top level only; subfolders are not scanned in v1).
+3. Open **Literature** for that project and click **「同步 literature/」** (Sync `literature/`).
+
+The server reads PDFs from disk, deduplicates by file hash (SHA-256), writes metadata + BLOBs into the local database, and links them to the project. Re-scanning skips papers already in the project; papers imported elsewhere are linked without duplicating the file. Deleting a PDF from the folder does **not** remove the library record (evidence and matrix links stay intact). Limits: ≤ 50 PDFs per sync, ≤ 25 MB per file.
+
+API: `POST /api/projects/:projectId/library/scan-inbox` (requires `workspacePath`).
+
 <img src="./docs/screenshots/library.png" alt="Literature library — papers, reading status, and Paper Card shortcuts" width="900" />
 
 ### PDF reader with structured annotations
@@ -53,7 +70,7 @@ Generate a structured card for any paper: Problem, Method, Data, Findings, Limit
 <img src="./docs/screenshots/paper-card.png" alt="Paper Card — structured problem, method, data, findings, and limitations" width="900" />
 
 ### Evidence Matrix
-Papers as columns × research dimensions as rows. AI extraction fills every cell with evidence, confidence, and source location (page + excerpt). Then you verify: mark a cell 原文一致 (matches the source), 需要修订 (needs revision), or 标记冲突 (conflict), and 确认并锁定 (confirm & lock) the ones you trust. Locked cells are never silently overwritten by batch AI runs.
+Papers as columns × research dimensions as rows. AI extraction fills every cell with evidence, confidence, and source location (page + excerpt). Then you verify: mark a cell 原文一致 (matches the source), 需要修订 (needs revision), or 标记冲突 (conflict), and 确认并锁定 (confirm & lock) the ones you trust. Locked cells are never silently overwritten by batch AI runs. With many papers (e.g. 50+), the matrix uses **horizontal scroll** with fixed column widths and a sticky left dimension column — use the top search box to filter papers.
 
 <img src="./docs/screenshots/matrix.png" alt="Evidence Matrix — papers × dimensions, with source-linked verification" width="900" />
 
@@ -77,6 +94,8 @@ Design main experiments and ablations with AI assistance, import CSV / JSON / pa
 ### Paper writing (LaTeX)
 Bind a local workspace folder to the project, edit `main.tex` / `references.bib`, keep snapshots, review AI Diff proposals before accepting, and optionally compile with Tectonic or latexmk for a real PDF preview. Dangerous shell commands are blocked; accepting a body Diff can trigger compile, and compile problems can generate a fix Diff.
 
+The same `workspacePath` also hosts the optional **`literature/` PDF inbox** (see [Literature library](#literature-library)) — writing sources live under `paper/`, importable PDFs under `literature/`.
+
 ### Global search & task center
 Search across projects from one box. Every long AI job shows scope, model, progress, and result — and can be cancelled.
 
@@ -93,7 +112,7 @@ Configure a single OpenAI-compatible endpoint in Settings — Base URL (default 
 
 | Common problem | How ArguMesh handles it |
 | --- | --- |
-| Papers scattered across folders, browsers, and note apps | Projects scope topics and their literature; search, filters, and tags keep them organized |
+| Papers scattered across folders, browsers, and note apps | Projects scope topics and their literature; search, filters, and tags keep them organized; **`literature/` folder sync** imports PDFs from a bound workspace without manual upload |
 | Highlights and summaries never get reused | The reader saves selections as Note / Claim / Evidence with paper + page attached |
 | Uploading whole PDFs to AI makes answers unverifiable | Reader Q&A submits only your selected passage, its page, and your question |
 | Manual spreadsheets make paper comparison inconsistent | The Evidence Matrix standardizes dimensions; every cell carries source, confidence, and verification state |
@@ -157,6 +176,10 @@ Optional: install [Tectonic](https://tectonic-typesetting.github.io/) or `latexm
 
 ## Changelog
 
+### v3.2.1 (2026-08) — Literature folder sync
+- **`literature/` inbox**: bind a project workspace, drop PDFs into `{workspacePath}/literature/`, click **Sync `literature/`** on the library page to import into the database (hash dedup, ≤ 50 files / sync, ≤ 25 MB each). API: `POST /api/projects/:projectId/library/scan-inbox`.
+- **Evidence Matrix (many papers)**: fixed column widths + horizontal scroll and sticky dimension column when a matrix has 15+ columns; verification pane stays viewport-width; **AI extract** falls back to server-stored PDFs (e.g. after `literature/` sync), batches 3 papers per request, tolerates null/overlong AI fields, and skips failed papers instead of aborting the whole run.
+
 ### v3.2.0 (2026-08) — Research workbench convergence
 Current release (`package.json` `3.2.0`).
 
@@ -191,7 +214,10 @@ Current release (`package.json` `3.2.0`).
 ## Data & backup
 
 - Database: `data/argumesh.db` (SQLite / libSQL) — projects, papers, evidence, research thread, experiments, AI conversations, and PDFs (BLOBs in `paper_files`, ≤ 25 MB per file)
-- Paper sources: local folder bound via the project's `workspacePath` (`main.tex`, `references.bib`, assets)
+- Project workspace (optional `workspacePath` on disk):
+  - `paper/` — LaTeX sources (`main.tex`, `references.bib`, figures) for writing
+  - `literature/` — PDF inbox for one-click library sync (see [Literature library](#literature-library))
+  - `.argumesh/` — paper snapshots (managed by ArguMesh)
 - Backup: `pnpm run db:backup` exports a JSON snapshot to `backups/`; Settings also offers workspace JSON export/restore
 
 ## Tech stack
@@ -216,7 +242,7 @@ server/            # Hono API (node.ts entry; routes/ by module)
                    # reader, knowledge, researchQuestions, gaps, ideas, reviews,
                    # experiments, evidenceLayers, researchThread, conversations,
                    # writing, ai, system
-  services/        # research-agent, latex, paper-files, project-context, …
+  services/        # research-agent, latex, paper-files, literature-inbox, project-context, …
 scripts/           # seed, migrate, migrate-custom, backup
 drizzle/           # SQL migrations (0000–0007; single-user port via migrate-custom)
 tests/unit/        # frontend unit tests (happy-dom)
@@ -243,6 +269,10 @@ Join the WeChat group **ArguMesh | AI学术工具** to discuss the product, repo
 </p>
 
 > WeChat group QR codes expire periodically. If the code above no longer works, open an issue or check the latest README update.
+
+## Reference projects
+
+Design and roadmap references (summaries + links, not vendored code): **[docs/reference-projects.md](./docs/reference-projects.md)** — [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep), [karpathy/autoresearch](https://github.com/karpathy/autoresearch), [pi-autoresearch](https://github.com/davebcn87/pi-autoresearch), [Mimir](https://github.com/1692775560/Mimir).
 
 ## License
 

@@ -98,9 +98,10 @@ export async function deleteAiConfig(): Promise<{ cleared: true }> {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) throw new Error("Unauthorized");
-  const payload = (await response.json()) as T & { message?: string };
+  const payload = (await response.json()) as T & { message?: string; detail?: string };
   if (!response.ok) {
-    throw new Error(payload.message ?? `请求失败 (${response.status})`);
+    const detail = typeof payload.detail === "string" && payload.detail.trim() ? `（${payload.detail.slice(0, 200)}）` : "";
+    throw new Error(`${payload.message ?? `请求失败 (${response.status})`}${detail}`);
   }
   return payload;
 }
@@ -188,8 +189,36 @@ export async function resolveLiterature(value: string) {
   }));
 }
 
+export interface LiteratureInboxScanItem {
+  fileName: string;
+  relativePath: string;
+  status: "imported" | "linked" | "skipped" | "failed";
+  paperId?: string;
+  title?: string;
+  fileHash?: string;
+  fileSize?: number;
+  message?: string;
+}
+
+export interface LiteratureInboxScanResult {
+  inboxPath: string;
+  scanned: number;
+  imported: number;
+  linked: number;
+  skipped: number;
+  failed: number;
+  items: LiteratureInboxScanItem[];
+}
+
+export async function scanLiteratureInbox(projectId: string) {
+  return parseResponse<LiteratureInboxScanResult>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/library/scan-inbox`, {
+    method: "POST",
+    headers: authenticatedHeaders(),
+  }));
+}
+
 export async function extractMatrix(matrixId: string, input: { papers: Array<{ id: string; title: string; pages: Array<{ page: number; text: string }> }>; dimensions: Array<{ id: string; label: string }>; model?: string; provider?: string }) {
-  return parseResponse<{ status: "completed" | "nothing_to_extract"; updated: number; total?: number; progress?: number; model?: string; message?: string }>(await fetch(`/api/matrices/${encodeURIComponent(matrixId)}/extract`, {
+  return parseResponse<{ status: "completed" | "nothing_to_extract"; updated: number; total?: number; progress?: number; model?: string; message?: string; skipped?: number }>(await fetch(`/api/matrices/${encodeURIComponent(matrixId)}/extract`, {
     method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
   }));
 }
@@ -1073,6 +1102,12 @@ export async function sendAiMessage(projectId: string, conversationId: string, c
 export async function cancelAiConversation(projectId: string, conversationId: string): Promise<{ id: string; status: "cancelled" }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/cancel`, {
     method: "POST", headers: authenticatedHeaders(),
+  }));
+}
+
+export async function deleteAiConversation(projectId: string, conversationId: string): Promise<{ id: string; deleted: true }> {
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}`, {
+    method: "DELETE", headers: authenticatedHeaders(),
   }));
 }
 

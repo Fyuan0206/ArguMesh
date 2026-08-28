@@ -1,4 +1,4 @@
-import { ArrowClockwise, ArrowLeft, ArrowRight, BookOpenText, Eye, FileText, FolderSimple, Heart, LinkSimple, MagnifyingGlass, NotePencil, PencilSimple, Plus, Trash, UploadSimple, X } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowLeft, ArrowRight, BookOpenText, Eye, FileText, FolderOpen, FolderSimple, Heart, LinkSimple, MagnifyingGlass, NotePencil, PencilSimple, Plus, Trash, UploadSimple, X } from "@phosphor-icons/react";
 import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { EditPaperModal } from "../components/EditPaperModal";
@@ -8,7 +8,7 @@ import { EmptyState } from "../components/states";
 import { deletePaperFiles, savePaperPdf } from "../storage/paperFiles";
 import { useWorkspace, type LocalPaper, type ReadingStatus } from "../state/workspace";
 import { inspectPdf, sha256File } from "../pdf/document";
-import { resolveLiterature, syncPaper, syncProject, uploadPaperFile } from "../api";
+import { resolveLiterature, scanLiteratureInbox, syncPaper, syncProject, uploadPaperFile } from "../api";
 
 const STATUSES: ReadingStatus[] = ["待读", "粗读", "精读", "核心文献"];
 type UploadItem = { id: string; file: File; progress: number; status: "queued" | "reading" | "uploading" | "done" | "failed"; message: string; paperId?: string };
@@ -26,6 +26,8 @@ export function LibraryPage() {
   const [importValue, setImportValue] = useState("");
   const [importError, setImportError] = useState("");
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
+  const [scanningInbox, setScanningInbox] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
   const [editingPaperId, setEditingPaperId] = useState("");
   const projectPapers = useMemo(() => papers.filter((paper) => paper.projectIds.includes(projectId ?? "")), [papers, projectId]);
   const filtered = useMemo(() => projectPapers.filter((paper) => (status === "全部" || paper.status === status) && `${paper.title} ${paper.authors} ${paper.venue} ${paper.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())), [projectPapers, query, status]);
@@ -150,6 +152,41 @@ export function LibraryPage() {
     finally { setImporting(false); }
   }
 
+  async function syncLiteratureFolder() {
+    if (scanningInbox || !currentProject.workspacePath) return;
+    setScanningInbox(true);
+    setScanMessage("");
+    try {
+      const result = await scanLiteratureInbox(currentProjectId);
+      for (const item of result.items) {
+        if ((item.status !== "imported" && item.status !== "linked") || !item.paperId || !item.title) continue;
+        addPaper({
+          id: item.paperId,
+          title: item.title,
+          authors: "",
+          venue: "本地 PDF",
+          year: new Date().getFullYear(),
+          projectIds: [currentProjectId],
+          fileHash: item.fileHash,
+          fileName: item.fileName || undefined,
+          fileSize: item.fileSize,
+          tags: ["inbox"],
+        });
+      }
+      const parts = [
+        result.imported ? `新导入 ${result.imported} 篇` : "",
+        result.linked ? `关联 ${result.linked} 篇` : "",
+        result.skipped ? `跳过 ${result.skipped} 篇` : "",
+        result.failed ? `失败 ${result.failed} 篇` : "",
+      ].filter(Boolean);
+      setScanMessage(parts.length ? `${parts.join("，")}（扫描目录：literature/）` : `literature/ 中暂无可导入的 PDF（${result.inboxPath}）`);
+    } catch (error) {
+      setScanMessage(error instanceof Error ? error.message : "同步文献文件夹失败");
+    } finally {
+      setScanningInbox(false);
+    }
+  }
+
   function openEditModal(paperId: string) { setEditingPaperId(paperId); }
 
   function handleEditSubmit(paper: LocalPaper, updates: { title: string; authors: string; venue: string; year: number; abstract: string; tags: string[]; readingStatus: ReadingStatus; favorite: boolean }) {
@@ -173,13 +210,25 @@ export function LibraryPage() {
   const editingPaper = editingPaperId ? papers.find((paper) => paper.id === editingPaperId) ?? null : null;
 
   return <div className="route-page">
-    <PageHeader eyebrow="项目文献库" title={project.name} actions={<><Link className="secondary-button" to="/projects"><ArrowLeft /> 切换项目</Link><label className="secondary-button upload-button"><UploadSimple />{uploading ? "正在上传…" : "批量上传 PDF"}<input type="file" accept="application/pdf,.pdf" multiple disabled={uploading} onChange={(event) => void uploadNewPdf(event)} /></label><button className="primary" onClick={() => setAdding(true)}><Plus /> 导入文献</button></>} />
+    <PageHeader eyebrow="项目文献库" title={project.name} actions={<><Link className="secondary-button" to="/projects"><ArrowLeft /> 切换项目</Link>{currentProject.workspacePath ? <button className="secondary-button" type="button" disabled={scanningInbox} onClick={() => void syncLiteratureFolder()}><FolderOpen />{scanningInbox ? "正在同步…" : "同步 literature/"}</button> : null}<label className="secondary-button upload-button"><UploadSimple />{uploading ? "正在上传…" : "批量上传 PDF"}<input type="file" accept="application/pdf,.pdf" multiple disabled={uploading} onChange={(event) => void uploadNewPdf(event)} /></label><button className="primary" onClick={() => setAdding(true)}><Plus /> 导入文献</button></>} />
     <SyncBanner />
+    {scanMessage ? <p className="form-note library-scan-note">{scanMessage}</p> : null}
     {editingPaper ? <EditPaperModal paper={editingPaper} statuses={STATUSES} currentProjectId={currentProjectId} onClose={() => setEditingPaperId("")} onSubmit={(updates) => { handleEditSubmit(editingPaper, updates); setEditingPaperId(""); }} onDelete={() => handleDelete(editingPaper)} onUnlink={editingPaper.projectIds.length > 1 ? handleUnlink.bind(null, editingPaper) : undefined} /> : null}
     <div className="toolbar-row"><label className="search wide"><MagnifyingGlass /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、作者、会议或标签" /></label><div className="segmented">{(["全部", ...STATUSES] as const).map((item) => <button className={status === item ? "active" : ""} onClick={() => setStatus(item)} key={item}>{item}</button>)}</div></div>
     {adding ? <div className="surface-card import-panel"><header><div><strong>导入文献</strong></div><button className="icon-button" type="button" onClick={() => setAdding(false)} aria-label="取消"><X /></button></header><form className="literature-resolver" onSubmit={(event) => void importLiterature(event)}><LinkSimple /><input value={importValue} onChange={(event) => setImportValue(event.target.value)} placeholder="10.xxxx/…、arXiv:2401.12345 或 https://…" autoFocus /><button className="primary" disabled={importing}>{importing ? "正在获取元数据…" : "识别并导入"}</button></form>{importError ? <p className="form-error">{importError}</p> : null}<form className="inline-form multi" onSubmit={submit}><label className="grow"><span>论文标题</span><input name="title" required /></label><label><span>作者</span><input name="authors" /></label><label><span>会议/期刊</span><input name="venue" /></label><label className="compact"><span>年份</span><input name="year" type="number" min="1900" max="2100" defaultValue={new Date().getFullYear()} /></label><button className="secondary-button" type="submit">手工保存</button></form></div> : null}
     {uploadItems.length ? <section className="upload-queue surface-card"><header><strong>PDF 上传任务</strong><button className="text-button" onClick={() => setUploadItems((current) => current.filter((item) => item.status !== "done"))}>清除已完成</button></header>{uploadItems.map((item) => <article key={item.id}><div><FileUploadState status={item.status} /><span><strong>{item.file.name}</strong><small>{item.message}</small></span></div><progress max={1} value={item.progress} />{item.status === "failed" ? <button className="text-button" onClick={() => void processUpload(item)}><ArrowClockwise />重试</button> : null}</article>)}</section> : null}
-        <div className="table-surface"><table className="data-table"><thead><tr><th>文献</th><th>发表</th><th>阅读状态</th><th>工作区</th></tr></thead><tbody>{filtered.map((paper) => <tr key={paper.id}><td><div className="paper-title-cell"><button className={`favorite-button ${paper.favorite ? "active" : ""}`} onClick={() => togglePaperFavorite(paper.id)} aria-label={paper.favorite ? "取消收藏" : "收藏文献"}><Heart weight={paper.favorite ? "fill" : "regular"} /></button><BookOpenText weight="duotone" /><span><strong>{paper.title}</strong><small>{paper.authors}{paper.tags.length ? ` · ${paper.tags.map((tag) => `#${tag}`).join(" ")}` : ""}</small>{paper.fileName ? <em>{paper.fileName} · {(paper.fileSize! / 1024 / 1024).toFixed(1)} MB{paper.pageCount ? ` · ${paper.pageCount} 页` : ""}</em> : null}{editingPaperId === paper.id ? <input className="tag-input" defaultValue={paper.tags.join(", ")} autoFocus onBlur={(event) => { setPaperTags(paper.id, event.target.value.split(/[,，]+/)); setEditingPaperId(""); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} placeholder="标签，逗号分隔" /> : null}</span><button className="icon-button subtle" onClick={() => setEditingPaperId(paper.id)} aria-label="编辑标签"><NotePencil /></button></div></td><td><strong>{paper.venue}</strong><small>{paper.year}</small></td><td><select className={`status-select status-${STATUSES.indexOf(paper.status)}`} value={paper.status} onChange={(event) => setReadingStatus(paper.id, event.target.value as ReadingStatus)}>{STATUSES.map((item) => <option key={item}>{item}</option>)}</select></td><td><div className="reader-actions"><Link className="secondary-button" to={`/projects/${encodeURIComponent(currentProjectId)}/library/${encodeURIComponent(paper.id)}`}><FileText />Paper Card</Link>{paper.fileName ? <button className="secondary-button" onClick={() => navigate(`/projects/${encodeURIComponent(currentProjectId)}/library/${encodeURIComponent(paper.id)}/read`)}><Eye />阅读</button> : null}<label className="text-button upload-link"><UploadSimple />{paper.fileName ? "更换" : "上传 PDF"}<input type="file" accept="application/pdf,.pdf" onChange={(event) => void uploadPdf(paper.id, event)} /></label><button className="text-button subtle" type="button" onClick={() => openEditModal(paper.id)} aria-label="编辑文献元数据"><PencilSimple /> 编辑</button><button className="text-button danger" type="button" onClick={() => handleDelete(paper)} aria-label="删除文献"><Trash /> 删除</button></div></td></tr>)}</tbody></table>{filtered.length === 0 ? <EmptyState icon={<BookOpenText />} title="当前项目没有匹配的文献" description="调整筛选条件，或向这个项目添加一篇文献。" /> : null}</div>
+    {filtered.length === 0 ? (
+      <div className="table-surface table-surface-empty">
+        <EmptyState
+          icon={<BookOpenText />}
+          title="当前项目没有匹配的文献"
+          description="调整筛选条件，或向这个项目添加一篇文献。"
+          action={<button className="primary" type="button" onClick={() => setAdding(true)}><Plus /> 导入文献</button>}
+        />
+      </div>
+    ) : (
+      <div className="table-surface"><table className="data-table"><thead><tr><th>文献</th><th>发表</th><th>阅读状态</th><th>工作区</th></tr></thead><tbody>{filtered.map((paper) => <tr key={paper.id}><td><div className="paper-title-cell"><button className={`favorite-button ${paper.favorite ? "active" : ""}`} onClick={() => togglePaperFavorite(paper.id)} aria-label={paper.favorite ? "取消收藏" : "收藏文献"}><Heart weight={paper.favorite ? "fill" : "regular"} /></button><BookOpenText weight="duotone" /><span><strong>{paper.title}</strong><small>{paper.authors}{paper.tags.length ? ` · ${paper.tags.map((tag) => `#${tag}`).join(" ")}` : ""}</small>{paper.fileName ? <em>{paper.fileName} · {(paper.fileSize! / 1024 / 1024).toFixed(1)} MB{paper.pageCount ? ` · ${paper.pageCount} 页` : ""}</em> : null}{editingPaperId === paper.id ? <input className="tag-input" defaultValue={paper.tags.join(", ")} autoFocus onBlur={(event) => { setPaperTags(paper.id, event.target.value.split(/[,，]+/)); setEditingPaperId(""); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} placeholder="标签，逗号分隔" /> : null}</span><button className="icon-button subtle" onClick={() => setEditingPaperId(paper.id)} aria-label="编辑标签"><NotePencil /></button></div></td><td><strong>{paper.venue}</strong><small>{paper.year}</small></td><td><select className={`status-select status-${STATUSES.indexOf(paper.status)}`} value={paper.status} onChange={(event) => setReadingStatus(paper.id, event.target.value as ReadingStatus)}>{STATUSES.map((item) => <option key={item}>{item}</option>)}</select></td><td><div className="reader-actions"><Link className="secondary-button" to={`/projects/${encodeURIComponent(currentProjectId)}/library/${encodeURIComponent(paper.id)}`}><FileText />Paper Card</Link>{paper.fileName ? <button className="secondary-button" onClick={() => navigate(`/projects/${encodeURIComponent(currentProjectId)}/library/${encodeURIComponent(paper.id)}/read`)}><Eye />阅读</button> : null}<label className="text-button upload-link"><UploadSimple />{paper.fileName ? "更换" : "上传 PDF"}<input type="file" accept="application/pdf,.pdf" onChange={(event) => void uploadPdf(paper.id, event)} /></label><button className="text-button subtle" type="button" onClick={() => openEditModal(paper.id)} aria-label="编辑文献元数据"><PencilSimple /> 编辑</button><button className="text-button danger" type="button" onClick={() => handleDelete(paper)} aria-label="删除文献"><Trash /> 删除</button></div></td></tr>)}</tbody></table></div>
+    )}
   </div>;
 }
 

@@ -249,4 +249,16 @@ describe("persistent bounded Research Agent", () => {
     const saved = await detail.json() as { messages: Array<{ status: string }> };
     expect(saved.messages.map((message) => message.status)).toEqual(["completed", "failed"]);
   });
+
+  it("deletes a conversation and its messages", async () => {
+    const created = await app.request(`/api/projects/${projectId}/ai/conversations`, { method: "POST", headers: jsonHeaders(), body: "{}" }, context.bindings);
+    const id = ((await created.json()) as { conversation: { id: string } }).conversation.id;
+    const deleted = await app.request(`/api/projects/${projectId}/ai/conversations/${id}`, { method: "DELETE" }, context.bindings);
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toMatchObject({ id, deleted: true });
+    const detail = await app.request(`/api/projects/${projectId}/ai/conversations/${id}`, {}, context.bindings);
+    expect(detail.status).toBe(404);
+    const missing = await app.request(`/api/projects/${projectId}/ai/conversations/missing`, { method: "DELETE" }, context.bindings);
+    expect(missing.status).toBe(404);
+  });
 });
