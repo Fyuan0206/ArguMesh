@@ -34,8 +34,8 @@ export async function executeResearchAgentTurn(env: AppBindings, input: AgentTur
     providerConfig: resolution.provider, model: resolution.model,
   });
   const citations = sanitizeCitations(generated.data.citations, context);
-  const action = generated.data.action
-    ? await executeAction(env, input, generated.data.action, context, generated.model, generated.generatedAt)
+    const action = generated.data.action
+    ? await executeWhitelistedAgentAction(env, input, generated.data.action, context, generated.model, generated.generatedAt)
     : null;
   return { ...generated.data, citations, action, model: generated.model, generatedAt: generated.generatedAt };
 }
@@ -63,7 +63,8 @@ function sanitizeCitations(citations: AgentOutput["citations"], context: NonNull
   });
 }
 
-async function executeAction(
+/** 白名单写动作执行器（Research Agent 与 Pi SDK 共用；始终以 draft / 提案形式落库）。 */
+export async function executeWhitelistedAgentAction(
   env: AppBindings,
   input: AgentTurnInput,
   action: NonNullable<AgentOutput["action"]>,

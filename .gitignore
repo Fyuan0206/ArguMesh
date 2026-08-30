@@ -50,5 +50,8 @@ desktop.ini
 
 # --- 本机 Agent / 任务草稿，不属于开源源码 ---
 .cursor/
-IMPACT_ANALYSIS.md
-TASK_SUMMARY.md
+docs/tasks/
+IMPACT_ANALYSIS*.md
+TASK_SUMMARY*.md
+*-PLAN.md
+*-plan.md

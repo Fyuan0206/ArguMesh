@@ -12,6 +12,8 @@ export interface AppBindings {
   AI_PROVIDERS?: string;
   /** 可选 LaTeX 引擎绝对路径；仅允许 tectonic/latexmk 可执行文件。 */
   LATEX_ENGINE_PATH?: string;
+  /** 设为 "0" 时禁用 Pi 多步 Research Agent（默认启用）。 */
+  ARGUMESH_ENABLE_PI_AGENT?: string;
 }
 
 /**

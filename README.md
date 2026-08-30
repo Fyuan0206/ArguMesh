@@ -176,6 +176,13 @@ Optional: install [Tectonic](https://tectonic-typesetting.github.io/) or `latexm
 
 ## Changelog
 
+### v3.2.2 (2026-08) — Pi multi-step Research Agent (SDK embed)
+- **Optional Pi engine**: project Research Agent can run in `pi_research` mode powered by `@earendil-works/pi-coding-agent`.
+- Reuses **Settings-page** OpenAI-compatible Base URL / API Key / model (no separate Pi login).
+- Built-in coding tools (`bash` / `write` / `edit`) stay **off**; only ArguMesh domain tools run (`project_context`, `insight_create_draft`, `research_question_link_evidence`), and writes remain **drafts**.
+- Pi turns stream over **SSE**; classic single-step agent is unchanged.
+- Disable with `ARGUMESH_ENABLE_PI_AGENT=0`.
+
 ### v3.2.1 (2026-08) — Literature folder sync
 - **`literature/` inbox**: bind a project workspace, drop PDFs into `{workspacePath}/literature/`, click **Sync `literature/`** on the library page to import into the database (hash dedup, ≤ 50 files / sync, ≤ 25 MB each). API: `POST /api/projects/:projectId/library/scan-inbox`.
 - **Evidence Matrix (many papers)**: fixed column widths + horizontal scroll and sticky dimension column when a matrix has 15+ columns; verification pane stays viewport-width; **AI extract** falls back to server-stored PDFs (e.g. after `literature/` sync), batches 3 papers per request, tolerates null/overlong AI fields, and skips failed papers instead of aborting the whole run.
@@ -187,7 +194,7 @@ Current release (`package.json` `3.2.0`).
 - **Research Thread**: insights pool (finding / contradiction / gap / concept) + research questions; legacy Knowledge / Gaps / Ideas / Questions routes redirect for bookmark compatibility.
 - **Experiments**: AI main/ablation design, CSV / JSON / paste import, evidence-cited analysis (does not execute experiments); analysis can append a conclusion draft onto the linked RQ.
 - **Writing**: bind a local `workspacePath`, edit `main.tex` / `references.bib`, snapshots, AI Diff review, optional Tectonic / latexmk compile + PDF preview.
-- **Persistent Research Agent**: multi-turn conversations, bounded project context, whitelist actions with jumpable citations.
+- **Persistent Research Agent**: multi-turn conversations, bounded project context, whitelist actions with jumpable citations. Optional **Pi multi-step** engine (`pi_research`) embeds `@earendil-works/pi-coding-agent` for tool loops while keeping coding tools off and writes as drafts only.
 - **Single-user local edition**: removed accounts / auth / `APP_ACCESS_TOKEN` (`accounts` and `owner_id` dropped via `scripts/migrate-custom.ts`); global AI config is a single Settings row.
 - Native folder picker for registering `workspacePath`.
 

@@ -44,7 +44,10 @@ export function ProjectHomePage() {
   const [thread, setThread] = useState<ResearchThread | null>(null);
   const [experimentCount, setExperimentCount] = useState(0);
   const [mode, setMode] = useState("research_orchestrator");
+  const [engine, setEngine] = useState<"research_orchestrator" | "pi_research">("research_orchestrator");
+  const [piAgentEnabled, setPiAgentEnabled] = useState(true);
   const [sending, setSending] = useState(false);
+  const [streamHint, setStreamHint] = useState("");
   const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -60,6 +63,7 @@ export function ProjectHomePage() {
       .then(async ([conversationRes, threadRes, experimentRes]) => {
         if (cancelled) return;
         setThread(threadRes); setExperimentCount(experimentRes.experiments.length);
+        setPiAgentEnabled(conversationRes.piAgentEnabled !== false);
         let list = conversationRes.conversations;
         if (!list.length) {
           const created = await createAiConversation(projectId);
@@ -67,6 +71,7 @@ export function ProjectHomePage() {
         }
         if (cancelled) return;
         setConversations(list);
+        setEngine(list[0].mode === "pi_research" ? "pi_research" : "research_orchestrator");
         await loadConversation(projectId, list[0].id);
       }).catch(() => setError("无法加载项目研究助手。"));
     return () => { cancelled = true; };
@@ -83,9 +88,9 @@ export function ProjectHomePage() {
 
   async function newConversation() {
     if (!projectId) return;
-    const created = await createAiConversation(projectId);
+    const created = await createAiConversation(projectId, "新研究对话", engine);
     setConversations((items) => [created.conversation, ...items]);
-    setActiveId(created.conversation.id); setMessages([]); setActions([]); setMode("research_orchestrator"); setError("");
+    setActiveId(created.conversation.id); setMessages([]); setActions([]); setMode(engine); setError(""); setStreamHint("");
   }
   async function stopConversation() {
     if (!projectId || !activeId) return;
@@ -116,16 +121,20 @@ export function ProjectHomePage() {
       id: `local-${Date.now()}`, conversationId: activeId, projectId, role: "user", content: content.trim(), citations: [],
       model: null, status: "completed", error: "", createdAt: new Date().toISOString(),
     };
-    setMessages((items) => [...items, optimistic]); setSending(true); setError("");
+    setMessages((items) => [...items, optimistic]); setSending(true); setError(""); setStreamHint(active?.mode === "pi_research" ? "Pi 多步推理中…" : "");
     try {
-      const response = await sendAiMessage(projectId, activeId, content.trim());
+      const response = await sendAiMessage(projectId, activeId, content.trim(), (event) => {
+        if (event.type === "tool_start") setStreamHint(`工具：${String(event.toolName ?? "")}`);
+        else if (event.type === "text_delta") setStreamHint("生成回复中…");
+        else if (event.type === "agent_end" || event.type === "done") setStreamHint("");
+      });
       setMode(response.mode);
       await loadConversation(projectId, activeId);
       const refreshed = await listAiConversations(projectId); setConversations(refreshed.conversations);
     } catch {
       setError("本回合失败。消息已保留，可以在下方重试；请检查 AI 配置或网络。" );
       await loadConversation(projectId, activeId).catch(() => undefined);
-    } finally { setSending(false); }
+    } finally { setSending(false); setStreamHint(""); }
   }
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget; const fd = new FormData(form); const content = String(fd.get("message") ?? "");
@@ -193,7 +202,7 @@ export function ProjectHomePage() {
             </div>
           </article>;
         })}
-        {sending ? <article className="agent-message agent-message-assistant"><div className="agent-message-avatar"><Brain /></div><div className="agent-message-body"><header><strong>Research Agent</strong><small>{MODE_LABELS[mode] ?? "组装项目上下文"}</small></header><div className="agent-thinking"><i /><i /><i /> 正在核对项目证据…</div></div></article> : null}
+        {sending ? <article className="agent-message agent-message-assistant"><div className="agent-message-avatar"><Brain /></div><div className="agent-message-body"><header><strong>Research Agent</strong><small>{streamHint || MODE_LABELS[mode] || (active?.mode === "pi_research" ? "Pi 多步 Agent" : "组装项目上下文")}</small></header><div className="agent-thinking"><i /><i /><i /> {streamHint || "正在核对项目证据…"}</div></div></article> : null}
         <div ref={endRef} />
       </div>
 
@@ -203,7 +212,19 @@ export function ProjectHomePage() {
           if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
         }} /><button className="primary" disabled={sending || active?.status === "cancelled"} aria-label="发送"><PaperPlaneTilt /></button></div>
         <div className="agent-composer-meta">
-          <span>单回合：最多 1 个受限动作 · 项目上下文有界</span>
+          <label className="agent-engine-picker">
+            <span>引擎</span>
+            <select
+              value={engine}
+              disabled={sending}
+              onChange={(event) => setEngine(event.target.value as "research_orchestrator" | "pi_research")}
+              aria-label="Research Agent 引擎"
+            >
+              <option value="research_orchestrator">经典（单步白名单）</option>
+              <option value="pi_research" disabled={!piAgentEnabled}>Pi 多步（SDK）</option>
+            </select>
+          </label>
+          <span>{active?.mode === "pi_research" ? "多步工具循环 · 仅领域草稿工具" : "单回合：最多 1 个受限动作 · 项目上下文有界"}</span>
           {active?.status === "active" ? <button type="button" className="agent-end-session" onClick={stopConversation}><Stop weight="bold" />结束会话</button> : null}
         </div>
       </form>
@@ -221,8 +242,8 @@ export function ProjectHomePage() {
         <Link to={`/projects/${encodedId}/research`}><span><GitBranch /></span><div><strong>研究脉络</strong><small>{thread?.stats.insights ?? 0} 条洞见 · {thread?.stats.questions ?? 0} 个问题</small></div><ArrowRight /></Link>
         <Link to={`/projects/${encodedId}/experiments`}><span><Flask /></span><div><strong>实验</strong><small>{experimentCount} 份设计</small></div><ArrowRight /></Link>
       </nav>
-      <section className="mission-agent-state"><ChatCircleDots /><div><strong>{MODE_LABELS[mode] ?? "Research Orchestrator"}</strong><small>自动选择专家模式；无需手动切换 Agent。</small></div></section>
-      <section className="mission-guardrails"><strong>可信研究护栏</strong><ul><li>不编造文献或实验结果</li><li>具体判断回链项目对象</li><li>写入只创建草稿</li><li>不提供 Shell 或任意文件访问</li></ul></section>
+      <section className="mission-agent-state"><ChatCircleDots /><div><strong>{active?.mode === "pi_research" ? "Pi 多步 Research Agent" : (MODE_LABELS[mode] ?? "Research Orchestrator")}</strong><small>{active?.mode === "pi_research" ? "Pi SDK 多步工具循环；写入仍只产生草稿。" : "自动选择专家模式；无需手动切换 Agent。"}</small></div></section>
+      <section className="mission-guardrails"><strong>可信研究护栏</strong><ul><li>不编造文献或实验结果</li><li>具体判断回链项目对象</li><li>写入只创建草稿</li><li>不提供 Shell 或任意文件访问</li><li>Pi 模式默认关闭 bash/write/edit</li></ul></section>
     </aside>
   </div>;
 }

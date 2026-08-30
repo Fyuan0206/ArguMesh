@@ -22,5 +22,6 @@ export function loadBindings(): AppBindings {
     AI_MODELS: process.env.AI_MODELS,
     AI_PROVIDERS: process.env.AI_PROVIDERS,
     LATEX_ENGINE_PATH: process.env.LATEX_ENGINE_PATH,
+    ARGUMESH_ENABLE_PI_AGENT: process.env.ARGUMESH_ENABLE_PI_AGENT,
   };
 }

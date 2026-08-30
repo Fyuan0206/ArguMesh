@@ -63,7 +63,9 @@ export async function getAiModels(): Promise<{ model: string; models: string[]; 
   try {
     const response = await fetch("/api/health");
     if (!response.ok) return { model: "", models: [], providers: [] };
-    const payload = (await response.json()) as { model?: string; models?: string[]; providers?: AiProviderInfo[] };
+    const raw = await response.text();
+    if (!raw.trim()) return { model: "", models: [], providers: [] };
+    const payload = JSON.parse(raw) as { model?: string; models?: string[]; providers?: AiProviderInfo[] };
     return { model: payload.model ?? "", models: payload.models ?? [], providers: payload.providers ?? [] };
   } catch {
     return { model: "", models: [], providers: [] };
@@ -98,7 +100,24 @@ export async function deleteAiConfig(): Promise<{ cleared: true }> {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) throw new Error("Unauthorized");
-  const payload = (await response.json()) as T & { message?: string; detail?: string };
+  const raw = await response.text();
+  if (!raw.trim()) {
+    throw new Error(
+      response.ok
+        ? "服务器返回了空响应，请稍后重试（常见于 API 热重载或代理中断）"
+        : `请求失败 (${response.status})：服务器未返回内容，请确认后端已启动后重试`,
+    );
+  }
+  let payload: T & { message?: string; detail?: string };
+  try {
+    payload = JSON.parse(raw) as T & { message?: string; detail?: string };
+  } catch {
+    throw new Error(
+      response.ok
+        ? "服务器返回了无法解析的响应，请稍后重试"
+        : `请求失败 (${response.status})：${raw.slice(0, 200)}`,
+    );
+  }
   if (!response.ok) {
     const detail = typeof payload.detail === "string" && payload.detail.trim() ? `（${payload.detail.slice(0, 200)}）` : "";
     throw new Error(`${payload.message ?? `请求失败 (${response.status})`}${detail}`);
@@ -344,7 +363,17 @@ export async function pickDirectory(): Promise<string | null> {
     body: "{}",
   });
   if (response.status === 401) throw new Error("Unauthorized");
-  const payload = (await response.json()) as { path?: string; cancelled?: boolean; message?: string };
+  const raw = await response.text();
+  let payload: { path?: string; cancelled?: boolean; message?: string } = {};
+  if (raw.trim()) {
+    try {
+      payload = JSON.parse(raw) as { path?: string; cancelled?: boolean; message?: string };
+    } catch {
+      throw new Error(`选择文件夹失败 (${response.status})：服务器返回了无法解析的响应`);
+    }
+  } else if (!response.ok) {
+    throw new Error(`选择文件夹失败 (${response.status})：服务器未返回内容`);
+  }
   if (response.status === 409 || response.status >= 500) {
     throw new Error(payload.message ?? `选择文件夹失败 (${response.status})`);
   }
@@ -1083,21 +1112,85 @@ export interface AiAction {
   createdAt: string;
 }
 
-export async function listAiConversations(projectId: string): Promise<{ conversations: AiConversation[] }> {
+export async function listAiConversations(projectId: string): Promise<{ conversations: AiConversation[]; piAgentEnabled?: boolean }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations`, { headers: authenticatedHeaders() }));
 }
-export async function createAiConversation(projectId: string, title = "新研究对话"): Promise<{ conversation: AiConversation }> {
+export async function createAiConversation(
+  projectId: string,
+  title = "新研究对话",
+  mode: "research_orchestrator" | "pi_research" = "research_orchestrator",
+): Promise<{ conversation: AiConversation }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations`, {
-    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ title }),
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ title, mode }),
   }));
 }
 export async function getAiConversation(projectId: string, conversationId: string): Promise<{ conversation: AiConversation; messages: AiMessage[]; actions: AiAction[] }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}`, { headers: authenticatedHeaders() }));
 }
-export async function sendAiMessage(projectId: string, conversationId: string, content: string): Promise<{ message: AiMessage; action: AiAction | null; mode: string }> {
-  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/messages`, {
-    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ content }),
-  }));
+
+async function parseSseAiMessage(
+  response: Response,
+  onEvent?: (event: { type: string; [key: string]: unknown }) => void,
+): Promise<{ message: AiMessage; action: AiAction | null; mode: string }> {
+  if (!response.body) throw new Error("PI_AGENT_STREAM_EMPTY");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let donePayload: { message: AiMessage; actions?: AiAction[]; mode?: string } | null = null;
+  let streamError: string | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const lines = chunk.split("\n");
+      let eventName = "message";
+      const dataLines: string[] = [];
+      for (const line of lines) {
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+      }
+      if (!dataLines.length) continue;
+      const payload = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
+      onEvent?.({ type: eventName, ...payload });
+      if (eventName === "done") {
+        donePayload = payload as { message: AiMessage; actions?: AiAction[]; mode?: string };
+      }
+      if (eventName === "error") {
+        streamError = String(payload.message ?? payload.code ?? "Pi Agent 失败");
+      }
+    }
+  }
+
+  if (streamError) throw new Error(streamError);
+  if (!donePayload?.message) throw new Error("PI_AGENT_STREAM_INCOMPLETE");
+  return {
+    message: donePayload.message,
+    action: donePayload.actions?.[0] ?? null,
+    mode: donePayload.mode ?? "pi_research",
+  };
+}
+
+export async function sendAiMessage(
+  projectId: string,
+  conversationId: string,
+  content: string,
+  onEvent?: (event: { type: string; [key: string]: unknown }) => void,
+): Promise<{ message: AiMessage; action: AiAction | null; mode: string }> {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    method: "POST",
+    headers: authenticatedHeaders({ "content-type": "application/json" }),
+    body: JSON.stringify({ content }),
+  });
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream")) {
+    if (!response.ok) throw new Error(`PI_AGENT_HTTP_${response.status}`);
+    return parseSseAiMessage(response, onEvent);
+  }
+  return parseResponse(response);
 }
 export async function cancelAiConversation(projectId: string, conversationId: string): Promise<{ id: string; status: "cancelled" }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/cancel`, {
