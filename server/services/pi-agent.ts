@@ -1,5 +1,5 @@
 /**
- * Pi coding-agent SDK adapter for ArguMesh.
+ * Pi coding-agent SDK — the Research Agent substrate for ArguMesh.
  * Reuses Settings AI credentials; disables bash/write/edit; domain tools write drafts only.
  */
 import {
@@ -29,13 +29,32 @@ export type PiAgentStreamEvent =
   | { type: "agent_end" }
   | { type: "error"; code: string; message: string };
 
+interface SessionState {
+  turn: AgentTurnInput;
+  recordedActions: unknown[];
+}
+
 interface CachedSession {
   session: AgentSession;
   unsubscribe: () => void;
   projectId: string;
+  state: SessionState;
 }
 
 const sessionCache = new Map<string, CachedSession>();
+
+const TOOL_NAMES = [
+  "project_context",
+  "insight_create_draft",
+  "research_question_create_draft",
+  "research_question_link_evidence",
+  "experiment_design_create_draft",
+  "ablation_design_add",
+  "result_analysis_create_draft",
+  "paper_patch_propose",
+  "bibliography_entry_propose",
+  "latex_compile",
+] as const;
 
 function summarizeContext(context: NonNullable<Awaited<ReturnType<typeof assembleProjectContext>>>) {
   return {
@@ -72,18 +91,45 @@ function summarizeContext(context: NonNullable<Awaited<ReturnType<typeof assembl
       name: item.name,
       cellCount: item.cells.length,
     })),
+    paper: context.paper
+      ? {
+          sourceVersion: context.paper.version,
+          bibliographyVersion: context.paper.bibliographyVersion,
+        }
+      : null,
   };
 }
 
-function buildDomainTools(env: AppBindings, turn: AgentTurnInput, recordedActions: unknown[]) {
+async function runDomainAction(
+  env: AppBindings,
+  state: SessionState,
+  action: Parameters<typeof executeWhitelistedAgentAction>[2],
+) {
+  const context = await assembleProjectContext(env, state.turn.projectId);
+  if (!context) {
+    return { content: [{ type: "text" as const, text: "PROJECT_NOT_FOUND" }], details: {} };
+  }
+  const result = await executeWhitelistedAgentAction(
+    env,
+    state.turn,
+    action,
+    context,
+    "pi-agent",
+    new Date().toISOString(),
+  );
+  state.recordedActions.push(result);
+  return { content: [{ type: "text" as const, text: JSON.stringify(result) }], details: {} };
+}
+
+function buildDomainTools(env: AppBindings, state: SessionState) {
   return [
     defineTool({
       name: "project_context",
       label: "Project context",
-      description: "Read a bounded snapshot of the current ArguMesh project.",
+      description: "Read a bounded snapshot of the current ArguMesh project (papers, insights, RQs, experiments, paper versions).",
       parameters: Type.Object({}),
       execute: async () => {
-        const context = await assembleProjectContext(env, turn.projectId);
+        const context = await assembleProjectContext(env, state.turn.projectId);
         if (!context) return { content: [{ type: "text" as const, text: "PROJECT_NOT_FOUND" }], details: {} };
         return {
           content: [{ type: "text" as const, text: JSON.stringify(summarizeContext(context)) }],
@@ -94,7 +140,7 @@ function buildDomainTools(env: AppBindings, turn: AgentTurnInput, recordedAction
     defineTool({
       name: "insight_create_draft",
       label: "Create insight draft",
-      description: "Create a draft insight. Never marks items confirmed.",
+      description: "Create a draft insight (finding/contradiction/gap/concept). Never marks items confirmed.",
       parameters: Type.Object({
         type: Type.Union([
           Type.Literal("finding"),
@@ -107,29 +153,31 @@ function buildDomainTools(env: AppBindings, turn: AgentTurnInput, recordedAction
         paperId: Type.Optional(Type.Union([Type.String({ maxLength: 160 }), Type.Null()])),
         evidenceIds: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 160 }), { maxItems: 20 })),
       }),
-      execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
-        const context = await assembleProjectContext(env, turn.projectId);
-        if (!context) return { content: [{ type: "text" as const, text: "PROJECT_NOT_FOUND" }], details: {} };
-        const result = await executeWhitelistedAgentAction(
-          env,
-          turn,
-          {
-            tool: "insight_create_draft",
-            input: {
-              type: params.type,
-              title: params.title,
-              summary: params.summary,
-              paperId: params.paperId ?? null,
-              evidenceIds: params.evidenceIds ?? [],
-            },
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "insight_create_draft",
+          input: {
+            type: params.type,
+            title: params.title,
+            summary: params.summary,
+            paperId: params.paperId ?? null,
+            evidenceIds: params.evidenceIds ?? [],
           },
-          context,
-          "pi-agent",
-          new Date().toISOString(),
-        );
-        recordedActions.push(result);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }], details: {} };
-      },
+        }),
+    }),
+    defineTool({
+      name: "research_question_create_draft",
+      label: "Create RQ draft",
+      description: "Create a draft research question from project evidence.",
+      parameters: Type.Object({
+        question: Type.String({ minLength: 1, maxLength: 2_000 }),
+        goal: Type.Optional(Type.String({ maxLength: 2_000 })),
+      }),
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "research_question_create_draft",
+          input: { question: params.question, goal: params.goal ?? "" },
+        }),
     }),
     defineTool({
       name: "research_question_link_evidence",
@@ -143,28 +191,118 @@ function buildDomainTools(env: AppBindings, turn: AgentTurnInput, recordedAction
         ),
         note: Type.Optional(Type.String({ maxLength: 2_000 })),
       }),
-      execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
-        const context = await assembleProjectContext(env, turn.projectId);
-        if (!context) return { content: [{ type: "text" as const, text: "PROJECT_NOT_FOUND" }], details: {} };
-        const result = await executeWhitelistedAgentAction(
-          env,
-          turn,
-          {
-            tool: "research_question_link_evidence",
-            input: {
-              rqId: params.rqId,
-              evidenceIds: params.evidenceIds,
-              stance: params.stance ?? "context",
-              note: params.note ?? "",
-            },
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "research_question_link_evidence",
+          input: {
+            rqId: params.rqId,
+            evidenceIds: params.evidenceIds,
+            stance: params.stance ?? "context",
+            note: params.note ?? "",
           },
-          context,
-          "pi-agent",
-          new Date().toISOString(),
-        );
-        recordedActions.push(result);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }], details: {} };
-      },
+        }),
+    }),
+    defineTool({
+      name: "experiment_design_create_draft",
+      label: "Create experiment draft",
+      description: "Create a planned experiment design draft (structured design object).",
+      parameters: Type.Object({
+        title: Type.String({ minLength: 1, maxLength: 200 }),
+        rqId: Type.Optional(Type.Union([Type.String({ maxLength: 160 }), Type.Null()])),
+        design: Type.Any(),
+      }),
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "experiment_design_create_draft",
+          input: {
+            title: params.title,
+            rqId: params.rqId ?? null,
+            design: params.design as never,
+          },
+        }),
+    }),
+    defineTool({
+      name: "ablation_design_add",
+      label: "Add ablation draft",
+      description: "Append a structured ablation to a planned experiment.",
+      parameters: Type.Object({
+        experimentId: Type.String({ minLength: 1, maxLength: 160 }),
+        ablation: Type.Any(),
+      }),
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "ablation_design_add",
+          input: {
+            experimentId: params.experimentId,
+            ablation: params.ablation as never,
+          },
+        }),
+    }),
+    defineTool({
+      name: "result_analysis_create_draft",
+      label: "Analyze results draft",
+      description: "Save a cited result-analysis draft for an imported experiment result.",
+      parameters: Type.Object({
+        experimentId: Type.String({ minLength: 1, maxLength: 160 }),
+        resultId: Type.String({ minLength: 1, maxLength: 160 }),
+        analysis: Type.Any(),
+      }),
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "result_analysis_create_draft",
+          input: {
+            experimentId: params.experimentId,
+            resultId: params.resultId,
+            analysis: params.analysis as never,
+          },
+        }),
+    }),
+    defineTool({
+      name: "paper_patch_propose",
+      label: "Propose paper Diff",
+      description: "Propose a paper source Diff without applying it. baseVersion must match current sourceVersion from project_context.",
+      parameters: Type.Object({
+        summary: Type.String({ minLength: 1, maxLength: 2_000 }),
+        proposedSource: Type.String({ minLength: 1, maxLength: 500_000 }),
+        baseVersion: Type.String({ minLength: 64, maxLength: 64 }),
+        warnings: Type.Optional(Type.Array(Type.String({ maxLength: 1_000 }), { maxItems: 50 })),
+      }),
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "paper_patch_propose",
+          input: {
+            summary: params.summary,
+            proposedSource: params.proposedSource,
+            baseVersion: params.baseVersion,
+            warnings: params.warnings ?? [],
+          },
+        }),
+    }),
+    defineTool({
+      name: "bibliography_entry_propose",
+      label: "Propose BibTeX entry",
+      description: "Propose a bibliography entry without changing references.bib. baseVersion must match bibliographyVersion.",
+      parameters: Type.Object({
+        citationKey: Type.String({ minLength: 1, maxLength: 120 }),
+        entry: Type.String({ minLength: 1, maxLength: 20_000 }),
+        baseVersion: Type.String({ minLength: 64, maxLength: 64 }),
+      }),
+      execute: async (_toolCallId, params) =>
+        runDomainAction(env, state, {
+          tool: "bibliography_entry_propose",
+          input: {
+            citationKey: params.citationKey,
+            entry: params.entry,
+            baseVersion: params.baseVersion,
+          },
+        }),
+    }),
+    defineTool({
+      name: "latex_compile",
+      label: "Compile LaTeX",
+      description: "Run the allowlisted local LaTeX compile for the project paper workspace.",
+      parameters: Type.Object({}),
+      execute: async () => runDomainAction(env, state, { tool: "latex_compile", input: {} }),
     }),
   ];
 }
@@ -201,10 +339,12 @@ async function getOrCreateSession(
   env: AppBindings,
   turn: AgentTurnInput,
   onEvent: (event: PiAgentStreamEvent) => void,
-  recordedActions: unknown[],
+  state: SessionState,
 ) {
   const existing = sessionCache.get(turn.conversationId);
   if (existing && existing.projectId === turn.projectId) {
+    existing.state.turn = turn;
+    existing.state.recordedActions = state.recordedActions;
     existing.unsubscribe();
     const unsubscribe = existing.session.subscribe((event) => {
       const mapped = mapSessionEvent(event);
@@ -231,10 +371,13 @@ async function getOrCreateSession(
     settingsManager,
     systemPromptOverride: () =>
       [
-        "You are ArguMesh Pi Research Agent — a multi-step research assistant in a local literature workbench.",
+        "You are ArguMesh Research Agent — the project-scoped research assistant built on the Pi AgentSession substrate.",
         "Evidence first: do not invent papers, metrics, or experiment results.",
         "Call project_context before making project-specific claims when unsure.",
-        "Writes must stay drafts via insight_create_draft / research_question_link_evidence.",
+        "Writes must stay drafts via the domain tools listed below; never claim confirmation or silent overwrite.",
+        "Available write tools: insight_create_draft, research_question_create_draft, research_question_link_evidence,",
+        "experiment_design_create_draft, ablation_design_add, result_analysis_create_draft,",
+        "paper_patch_propose, bibliography_entry_propose, latex_compile.",
         "You have no shell, filesystem write, or code execution tools.",
         "Reply in the user's language. Cite project object ids when relevant.",
       ].join("\n"),
@@ -247,8 +390,8 @@ async function getOrCreateSession(
     model: bridge.model,
     thinkingLevel: "off",
     modelRuntime: bridge.modelRuntime,
-    tools: ["project_context", "insight_create_draft", "research_question_link_evidence"],
-    customTools: buildDomainTools(env, turn, recordedActions),
+    tools: [...TOOL_NAMES],
+    customTools: buildDomainTools(env, state),
     resourceLoader,
     sessionManager: SessionManager.inMemory(),
     settingsManager,
@@ -258,7 +401,7 @@ async function getOrCreateSession(
     const mapped = mapSessionEvent(event);
     if (mapped) onEvent(mapped);
   });
-  sessionCache.set(turn.conversationId, { session, unsubscribe, projectId: turn.projectId });
+  sessionCache.set(turn.conversationId, { session, unsubscribe, projectId: turn.projectId, state });
   return session;
 }
 
@@ -268,14 +411,14 @@ export interface RunPiAgentTurnResult {
   actions: unknown[];
 }
 
-/** Run one user turn (multi-step domain tools; coding tools disabled). */
+/** Run one user turn through the Pi AgentSession (multi-step domain tools; coding tools disabled). */
 export async function runPiAgentTurn(
   env: AppBindings,
   turn: AgentTurnInput,
   onEvent: (event: PiAgentStreamEvent) => void,
 ): Promise<RunPiAgentTurnResult> {
-  const recordedActions: unknown[] = [];
-  const session = await getOrCreateSession(env, turn, onEvent, recordedActions);
+  const state: SessionState = { turn, recordedActions: [] };
+  const session = await getOrCreateSession(env, turn, onEvent, state);
   const resolution = await resolveAiForRequest(env, {});
   if ("error" in resolution) {
     throw new AgentConfigurationError(resolution.error.code, resolution.error.message);
@@ -302,5 +445,5 @@ export async function runPiAgentTurn(
   if (!reply) reply = "(no text reply this turn)";
 
   onEvent({ type: "agent_end" });
-  return { reply, model: resolution.model, actions: recordedActions };
+  return { reply, model: resolution.model, actions: state.recordedActions };
 }

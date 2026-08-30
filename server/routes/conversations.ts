@@ -4,11 +4,14 @@ import { z } from "zod";
 import { createDatabase } from "../db/client";
 import { projectExists } from "../db/projects";
 import { aiActions, aiConversations, aiMessages } from "../db/schema";
-import { AgentConfigurationError, executeResearchAgentTurn } from "../services/research-agent";
+import { AgentConfigurationError } from "../services/research-agent";
 import { disposePiAgentSession, runPiAgentTurn, type PiAgentStreamEvent } from "../services/pi-agent";
 import type { AppEnv } from "../types";
 
-const conversationModeSchema = z.enum(["research_orchestrator", "pi_research"]);
+/** Canonical Research Agent mode (legacy aliases accepted on create). */
+const conversationModeSchema = z
+  .enum(["research_agent", "pi_research", "research_orchestrator"])
+  .transform(() => "research_agent" as const);
 
 function parseJson<T>(value: string, fallback: T): T {
   try {
@@ -30,11 +33,6 @@ function toAction(row: typeof aiActions.$inferSelect) {
   };
 }
 
-function isPiAgentEnabled(env: AppEnv["Bindings"]) {
-  // Opt-out: ARGUMESH_ENABLE_PI_AGENT=0 disables the Pi multi-step path.
-  return env.ARGUMESH_ENABLE_PI_AGENT !== "0";
-}
-
 function encodeSse(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -49,7 +47,7 @@ conversationRoutes.get("/projects/:projectId/ai/conversations", async (c) => {
     .from(aiConversations)
     .where(eq(aiConversations.projectId, projectId))
     .orderBy(desc(aiConversations.updatedAt));
-  return c.json({ conversations: rows, piAgentEnabled: isPiAgentEnabled(c.env) });
+  return c.json({ conversations: rows });
 });
 
 conversationRoutes.post("/projects/:projectId/ai/conversations", async (c) => {
@@ -58,13 +56,10 @@ conversationRoutes.post("/projects/:projectId/ai/conversations", async (c) => {
   const parsed = z
     .object({
       title: z.string().min(1).max(200).default("新研究对话"),
-      mode: conversationModeSchema.default("research_orchestrator"),
+      mode: conversationModeSchema.default("research_agent"),
     })
     .safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "INVALID_CONVERSATION", issues: parsed.error.issues }, 400);
-  if (parsed.data.mode === "pi_research" && !isPiAgentEnabled(c.env)) {
-    return c.json({ error: "PI_AGENT_DISABLED", message: "Pi 多步 Agent 已禁用（ARGUMESH_ENABLE_PI_AGENT=0）" }, 400);
-  }
   const now = new Date().toISOString();
   const conversation = {
     id: crypto.randomUUID(),
@@ -158,90 +153,57 @@ conversationRoutes.post("/projects/:projectId/ai/conversations/:conversationId/m
     history: historyRows.reverse().map((row) => ({ role: row.role as "user" | "assistant", content: row.content })),
   };
 
-  if (conversation.mode === "pi_research") {
-    if (!isPiAgentEnabled(c.env)) {
-      await db.update(aiMessages).set({ status: "failed", error: "Pi Agent 已禁用" }).where(eq(aiMessages.id, assistantId));
-      return c.json({ error: "PI_AGENT_DISABLED", message: "Pi 多步 Agent 已禁用" }, 400);
-    }
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(encoder.encode(encodeSse(event, data)));
+      };
+      try {
+        const result = await runPiAgentTurn(c.env, turn, (event: PiAgentStreamEvent) => {
+          send(event.type, event);
+        });
+        const completedAt = new Date().toISOString();
+        await db
+          .update(aiMessages)
+          .set({
+            content: result.reply,
+            citationsJson: "[]",
+            model: result.model,
+            status: "completed",
+            error: "",
+          })
+          .where(eq(aiMessages.id, assistantId));
+        await db.update(aiConversations).set({ updatedAt: completedAt }).where(eq(aiConversations.id, conversationId));
+        const assistant = await db.select().from(aiMessages).where(eq(aiMessages.id, assistantId)).get();
+        send("done", {
+          message: toMessage(assistant!),
+          actions: result.actions,
+          mode: "research_agent",
+        });
+      } catch (error) {
+        const code = error instanceof AgentConfigurationError ? error.code : "PI_AGENT_FAILED";
+        const message = error instanceof Error ? error.message : "Research Agent 暂时无法完成此回合";
+        await db
+          .update(aiMessages)
+          .set({ content: "", status: "failed", error: message })
+          .where(eq(aiMessages.id, assistantId));
+        send("error", { code, message, assistantMessageId: assistantId, retryable: true });
+      } finally {
+        controller.close();
+      }
+    },
+  });
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        const send = (event: string, data: unknown) => {
-          controller.enqueue(encoder.encode(encodeSse(event, data)));
-        };
-        try {
-          const result = await runPiAgentTurn(c.env, turn, (event: PiAgentStreamEvent) => {
-            send(event.type, event);
-          });
-          const completedAt = new Date().toISOString();
-          await db
-            .update(aiMessages)
-            .set({
-              content: result.reply,
-              citationsJson: "[]",
-              model: result.model,
-              status: "completed",
-              error: "",
-            })
-            .where(eq(aiMessages.id, assistantId));
-          await db.update(aiConversations).set({ updatedAt: completedAt }).where(eq(aiConversations.id, conversationId));
-          const assistant = await db.select().from(aiMessages).where(eq(aiMessages.id, assistantId)).get();
-          send("done", {
-            message: toMessage(assistant!),
-            actions: result.actions,
-            mode: "pi_research",
-          });
-        } catch (error) {
-          const code = error instanceof AgentConfigurationError ? error.code : "PI_AGENT_FAILED";
-          const message = error instanceof Error ? error.message : "Pi Agent 暂时无法完成此回合";
-          await db
-            .update(aiMessages)
-            .set({ content: "", status: "failed", error: message })
-            .where(eq(aiMessages.id, assistantId));
-          send("error", { code, message, assistantMessageId: assistantId, retryable: true });
-        } finally {
-          controller.close();
-        }
-      },
-    });
-
-    return c.newResponse(stream, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
-  }
-
-  try {
-    const result = await executeResearchAgentTurn(c.env, turn);
-    const completedAt = new Date().toISOString();
-    await db
-      .update(aiMessages)
-      .set({
-        content: result.reply,
-        citationsJson: JSON.stringify(result.citations),
-        model: result.model,
-        status: "completed",
-        error: "",
-      })
-      .where(eq(aiMessages.id, assistantId));
-    await db.update(aiConversations).set({ updatedAt: completedAt }).where(eq(aiConversations.id, conversationId));
-    const assistant = await db.select().from(aiMessages).where(eq(aiMessages.id, assistantId)).get();
-    return c.json({ message: toMessage(assistant!), action: result.action, mode: result.mode });
-  } catch (error) {
-    const code = error instanceof AgentConfigurationError ? error.code : "RESEARCH_AGENT_FAILED";
-    const message = error instanceof Error ? error.message : "Research Agent 暂时无法完成此回合";
-    await db.update(aiMessages).set({ content: "", status: "failed", error: message }).where(eq(aiMessages.id, assistantId));
-    return c.json(
-      { error: code, message, assistantMessageId: assistantId, retryable: true },
-      error instanceof AgentConfigurationError ? 400 : 502,
-    );
-  }
+  return c.newResponse(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 });
 
 conversationRoutes.post("/projects/:projectId/ai/conversations/:conversationId/cancel", async (c) => {

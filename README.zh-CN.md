@@ -27,7 +27,7 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 ### 项目优先的工作区 + Research Agent
 打开后进入项目列表。进入项目后,侧栏按研究阶段组织:**AI 研究助手 → 文献 → 证据矩阵 → 研究脉络 → 实验 → 论文写作**。
 
-项目首页是可持续对话的 Research Agent:多轮会话,装配有界项目上下文(文献摘要、证据矩阵、研究脉络、实验结果、论文源文件与编译状态)。默认每回合最多执行一个结构化白名单动作——创建洞见草稿、关联 RQ 证据、设计实验、提出论文 Diff、安全编译 LaTeX 等——并给出可跳转回工作区的引用。也可切换 **Pi 多步**引擎（嵌入 Pi coding-agent SDK）：允许多轮工具循环，但仍关闭 bash/写文件，写入只产生草稿。
+项目首页是可持续对话的 **Research Agent**，底层为 [Pi](https://pi.dev/docs/latest/sdk) `AgentSession`（`@earendil-works/pi-coding-agent`）：多步工具循环，装配有界项目上下文（文献、证据矩阵、研究脉络、实验结果、论文源文件）。领域白名单工具可创建洞见草稿、关联 RQ 证据、设计实验、提出论文 Diff、安全编译 LaTeX 等，并给出可跳转回工作区的引用。内置编程工具（bash / write / edit）关闭；写入只产生草稿。
 
 <img src="./docs/screenshots/projects.png" alt="项目列表：新建、搜索并进入研究项目" width="900" />
 
@@ -190,25 +190,28 @@ AI_PROVIDERS=[{"id":"stepfun","label":"StepFun","baseUrl":"https://api.stepfun.c
 
 ## 更新记录
 
+### v3.2.3（2026-08）— Pi 作为 Research Agent 底座
+- Research Agent **始终**运行在 Pi `AgentSession`（SSE）上；无引擎切换 / 双路径。
+- 完整领域白名单作为 Pi 工具：上下文 + 洞见 / RQ / 实验 / 消融 / 结果分析 / 论文 Diff / BibTeX / LaTeX 编译。
+- 编程工具保持关闭；写入仍为草稿。设置页 AI 配置为唯一凭证桥接。
+- 会话 mode 存为 `research_agent`（创建时仍接受旧别名 `pi_research` / `research_orchestrator`）。
+
 ### v3.2.2（2026-08）— Pi 多步 Research Agent（SDK 嵌入）
-- **可选 Pi 引擎**：项目 Research Agent 可切换为 `pi_research` 模式，底层嵌入 `@earendil-works/pi-coding-agent`。
-- 复用**设置页**的 OpenAI 兼容 Base URL / API Key / 模型（无需单独 Pi 登录）。
-- 关闭内置编程工具（`bash` / `write` / `edit`）；仅开放论脉领域工具（`project_context`、`insight_create_draft`、`research_question_link_evidence`），写入仍为**草稿**。
-- Pi 回合以 **SSE** 流式返回；经典单步 Agent 保持不变。
-- 可用 `ARGUMESH_ENABLE_PI_AGENT=0` 关闭。
+- 嵌入 `@earendil-works/pi-coding-agent` 做多步工具循环（v3.2.3 起成为唯一路径）。
+- 复用设置页 OpenAI 兼容配置；关闭编程工具；写入仅草稿。
 
 ### v3.2.1（2026-08）— 文献文件夹同步
 - **`literature/` 收件箱**:绑定项目工作区后,将 PDF 放入 `{workspacePath}/literature/`,在文献库点击 **「同步 literature/」** 即可导入数据库(哈希去重,每次 ≤ 50 篇,单文件 ≤ 25 MB)。API:`POST /api/projects/:projectId/library/scan-inbox`。
 - **证据矩阵(文献较多)**:15 篇以上时使用固定列宽 + 横向滚动 + 左侧维度列固定;下方核验区不随矩阵横向撑宽;**AI 提取**会回退读取数据库中的 PDF(如 `literature/` 同步后),按每批 3 篇提交,容忍 AI 返回 null/超长字段,单篇失败不中断整批。
 
 ### v3.2.0（2026-08）— 研究工作台收敛
-发布基线（`package.json` 现为 `3.2.2`，本小节为工作台收敛）。
+发布基线（`package.json` 现为 `3.2.3`，本小节为工作台收敛）。
 
 - 顶层导航收敛为：**AI 研究助手 → 文献 → 证据矩阵 → 研究脉络 → 实验 → 论文写作**。
 - **研究脉络**：洞见池（发现 / 矛盾 / 缺口 / 构想）+ 研究问题；旧 Knowledge / Gaps / Ideas / Questions 路由保留重定向以兼容书签。
 - **实验工作台**：AI 主实验 / 消融设计、CSV / JSON / 粘贴导入、带证据引用的结果分析（不执行实验本身）；分析可将结论草稿回挂到对应 RQ。
 - **论文写作**：绑定本地 `workspacePath`、编辑 `main.tex` / `references.bib`、快照、AI Diff 审阅、可选 Tectonic / latexmk 编译与 PDF 预览。
-- **持久 Research Agent**：多轮会话、有界项目上下文、白名单动作与可跳转引用。可选 **Pi 多步**引擎（`pi_research`）嵌入 `@earendil-works/pi-coding-agent`，关闭编程工具，写入仍为草稿。
+- **持久 Research Agent**：以 Pi `AgentSession` 为底座的多步领域工具循环、有界项目上下文、白名单草稿动作与可跳转引用（`@earendil-works/pi-coding-agent`；编程工具关闭）。
 - **单用户本地版**：移除账户 / 鉴权 / `APP_ACCESS_TOKEN`（`accounts` 与 `owner_id` 经 `scripts/migrate-custom.ts` 删除）；AI 配置改为设置页单行全局配置。
 - 原生文件夹选择器，用于登记 `workspacePath`。
 

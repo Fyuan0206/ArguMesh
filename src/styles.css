@@ -1868,8 +1868,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .agent-composer-box button { width: 40px; height: 40px; padding: 0; border-radius: 10px; }
 .agent-composer-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; max-width: 720px; margin: 8px auto 0; color: #98a2b3; font-size: 11px; }
 .agent-composer-meta > span { min-width: 0; }
-.agent-engine-picker { display: inline-flex; align-items: center; gap: 6px; color: #667085; font-weight: 650; }
-.agent-engine-picker select { min-height: 28px; border: 1px solid #e4e7ec; border-radius: 7px; background: #fff; color: #344054; font-size: 11px; font-weight: 650; padding: 0 8px; }
 .agent-end-session { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 9px; border: 1px solid #e4e7ec; border-radius: 7px; background: #fff; color: #667085; font-size: 11px; font-weight: 650; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease; }
 .agent-end-session:hover { border-color: #fecdca; background: #fef3f2; color: #b42318; }
 .agent-end-session svg { width: 13px; height: 13px; }

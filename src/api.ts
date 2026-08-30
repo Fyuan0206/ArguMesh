@@ -1112,16 +1112,15 @@ export interface AiAction {
   createdAt: string;
 }
 
-export async function listAiConversations(projectId: string): Promise<{ conversations: AiConversation[]; piAgentEnabled?: boolean }> {
+export async function listAiConversations(projectId: string): Promise<{ conversations: AiConversation[] }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations`, { headers: authenticatedHeaders() }));
 }
 export async function createAiConversation(
   projectId: string,
   title = "新研究对话",
-  mode: "research_orchestrator" | "pi_research" = "research_orchestrator",
 ): Promise<{ conversation: AiConversation }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations`, {
-    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ title, mode }),
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ title, mode: "research_agent" }),
   }));
 }
 export async function getAiConversation(projectId: string, conversationId: string): Promise<{ conversation: AiConversation; messages: AiMessage[]; actions: AiAction[] }> {
@@ -1166,11 +1165,11 @@ async function parseSseAiMessage(
   }
 
   if (streamError) throw new Error(streamError);
-  if (!donePayload?.message) throw new Error("PI_AGENT_STREAM_INCOMPLETE");
+  if (!donePayload?.message) throw new Error("RESEARCH_AGENT_STREAM_INCOMPLETE");
   return {
     message: donePayload.message,
     action: donePayload.actions?.[0] ?? null,
-    mode: donePayload.mode ?? "pi_research",
+    mode: donePayload.mode ?? "research_agent",
   };
 }
 
@@ -1185,12 +1184,11 @@ export async function sendAiMessage(
     headers: authenticatedHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ content }),
   });
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("text/event-stream")) {
-    if (!response.ok) throw new Error(`PI_AGENT_HTTP_${response.status}`);
-    return parseSseAiMessage(response, onEvent);
+  if (!response.ok && !(response.headers.get("content-type") ?? "").includes("text/event-stream")) {
+    return parseResponse(response);
   }
-  return parseResponse(response);
+  if (!response.ok) throw new Error(`RESEARCH_AGENT_HTTP_${response.status}`);
+  return parseSseAiMessage(response, onEvent);
 }
 export async function cancelAiConversation(projectId: string, conversationId: string): Promise<{ id: string; status: "cancelled" }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/cancel`, {
