@@ -405,10 +405,54 @@ async function getOrCreateSession(
   return session;
 }
 
+export interface PiAgentCitation {
+  kind: "project" | "paper" | "insight" | "research_question" | "experiment" | "result";
+  id: string;
+  label: string;
+  href: string;
+}
+
 export interface RunPiAgentTurnResult {
   reply: string;
   model: string;
   actions: unknown[];
+  citations: PiAgentCitation[];
+}
+
+const TOOL_CITATION_META: Record<string, { kind: PiAgentCitation["kind"]; label: string }> = {
+  insight_create_draft: { kind: "insight", label: "洞见草稿" },
+  research_question_create_draft: { kind: "research_question", label: "研究问题草稿" },
+  research_question_link_evidence: { kind: "research_question", label: "已关联证据的研究问题" },
+  experiment_design_create_draft: { kind: "experiment", label: "实验设计草稿" },
+  ablation_design_add: { kind: "experiment", label: "消融设计" },
+  result_analysis_create_draft: { kind: "result", label: "结果分析草稿" },
+  paper_patch_propose: { kind: "project", label: "论文 Diff 提案" },
+  bibliography_entry_propose: { kind: "project", label: "参考文献提案" },
+  latex_compile: { kind: "project", label: "LaTeX 编译" },
+};
+
+/** Build jumpable citations from completed whitelist actions (Pi has no classic JSON citations). */
+export function citationsFromActions(actions: unknown[]): PiAgentCitation[] {
+  const seen = new Set<string>();
+  const citations: PiAgentCitation[] = [];
+  for (const raw of actions) {
+    if (!raw || typeof raw !== "object") continue;
+    const action = raw as {
+      status?: string;
+      toolName?: string;
+      output?: { id?: string; href?: string; resultId?: string };
+    };
+    if (action.status !== "completed" || typeof action.output?.href !== "string" || !action.output.href) continue;
+    const toolName = action.toolName ?? "";
+    const meta = TOOL_CITATION_META[toolName] ?? { kind: "project" as const, label: toolName || "项目对象" };
+    const id = String(action.output.id ?? action.output.resultId ?? toolName);
+    const key = `${meta.kind}:${id}:${action.output.href}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    citations.push({ kind: meta.kind, id, label: meta.label, href: action.output.href });
+    if (citations.length >= 30) break;
+  }
+  return citations;
 }
 
 /** Run one user turn through the Pi AgentSession (multi-step domain tools; coding tools disabled). */
@@ -444,6 +488,7 @@ export async function runPiAgentTurn(
   }
   if (!reply) reply = "(no text reply this turn)";
 
+  const citations = citationsFromActions(state.recordedActions);
   onEvent({ type: "agent_end" });
-  return { reply, model: resolution.model, actions: state.recordedActions };
+  return { reply, model: resolution.model, actions: state.recordedActions, citations };
 }

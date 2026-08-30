@@ -249,7 +249,7 @@ interface WorkspaceContextValue extends WorkspaceData {
   updateIdea: (ideaId: string, updates: { title?: string; summary?: string; canvas?: IdeaCanvas; evidenceIds?: string[] }) => void;
   restoreIdeaVersion: (ideaId: string, versionId: string) => void;
   deleteIdea: (ideaId: string) => void;
-  addKnowledge: (input: Omit<KnowledgeItem, "id" | "createdAt">) => string;
+  addKnowledge: (input: Omit<KnowledgeItem, "id" | "createdAt"> & { id?: string; createdAt?: string }) => string;
   updateKnowledge: (itemId: string, updates: Partial<Pick<KnowledgeItem, "title" | "content" | "note" | "kind" | "status">>) => void;
   deleteKnowledge: (itemId: string) => void;
   addTask: (input: Pick<WorkspaceTask, "projectId" | "title" | "detail"> & Partial<Pick<WorkspaceTask, "model">>) => string;
@@ -704,8 +704,46 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       });
     },
     addKnowledge(input) {
-      const id = createId(input.kind);
-      setData((current) => ({ ...current, knowledge: [{ ...input, id, createdAt: new Date().toISOString() }, ...current.knowledge] }));
+      const id = input.id ?? createId(input.kind);
+      const item: KnowledgeItem = { ...input, id, createdAt: input.createdAt ?? new Date().toISOString() };
+      setData((current) => ({
+        ...current,
+        knowledge: [item, ...current.knowledge.filter((entry) => entry.id !== id)],
+      }));
+      // Persist to DB so Research Thread / Agent see reader excerpts (not local-only).
+      if (item.paperId) {
+        const kind = item.kind === "evidence" || item.kind === "claim" || item.kind === "note" ? item.kind : "note";
+        runSync(`同步知识「${item.title}」`, async () => {
+          const { item: saved } = await api.createKnowledge(item.projectId, {
+            paperId: item.paperId,
+            kind,
+            title: item.title,
+            content: item.content,
+            quote: item.content,
+            note: item.note ?? "",
+            page: item.page || 1,
+            status: item.status === "confirmed" ? "confirmed" : "draft",
+          });
+          setData((current) => ({
+            ...current,
+            knowledge: current.knowledge.map((entry) =>
+              entry.id === id
+                ? {
+                    ...entry,
+                    id: saved.id,
+                    title: saved.title,
+                    content: saved.content,
+                    note: saved.note,
+                    page: saved.page,
+                    kind: saved.kind,
+                    status: saved.status === "confirmed" ? "confirmed" : "draft",
+                    source: saved.source === "ai" ? "ai" : "human",
+                  }
+                : entry,
+            ),
+          }));
+        });
+      }
       return id;
     },
     updateKnowledge(itemId, updates) {

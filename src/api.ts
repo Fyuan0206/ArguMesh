@@ -1165,7 +1165,9 @@ async function parseSseAiMessage(
   }
 
   if (streamError) throw new Error(streamError);
-  if (!donePayload?.message) throw new Error("RESEARCH_AGENT_STREAM_INCOMPLETE");
+  if (!donePayload?.message) {
+    throw new Error("流式连接中断，未收到完整回复。请重试；若刚改过代码，可能是热重载断开了连接。");
+  }
   return {
     message: donePayload.message,
     action: donePayload.actions?.[0] ?? null,

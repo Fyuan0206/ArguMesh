@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
@@ -84,6 +84,18 @@ conversationRoutes.get("/projects/:projectId/ai/conversations/:conversationId", 
     .where(and(eq(aiConversations.id, conversationId), eq(aiConversations.projectId, projectId)))
     .get();
   if (!conversation) return c.json({ error: "CONVERSATION_NOT_FOUND" }, 404);
+  // Heal stale pending rows (hot-reload / killed API). Skip fresh ones so an in-flight turn is not raced.
+  const staleBefore = new Date(Date.now() - 90_000).toISOString();
+  await db
+    .update(aiMessages)
+    .set({ status: "failed", error: "回合连接中断，请重试" })
+    .where(
+      and(
+        eq(aiMessages.conversationId, conversationId),
+        eq(aiMessages.status, "pending"),
+        lt(aiMessages.createdAt, staleBefore),
+      ),
+    );
   const [messages, actions] = await Promise.all([
     db.select().from(aiMessages).where(eq(aiMessages.conversationId, conversationId)).orderBy(asc(aiMessages.createdAt)),
     db.select().from(aiActions).where(eq(aiActions.conversationId, conversationId)).orderBy(asc(aiActions.createdAt)),
@@ -106,6 +118,12 @@ conversationRoutes.post("/projects/:projectId/ai/conversations/:conversationId/m
   if (conversation.status !== "active") {
     return c.json({ error: "CONVERSATION_CANCELLED", message: "该会话已结束，请新建会话后继续" }, 409);
   }
+
+  // Heal turns left pending when SSE was aborted (Vite proxy / API hot-reload).
+  await db
+    .update(aiMessages)
+    .set({ status: "failed", error: "上一回合连接中断，请重试" })
+    .where(and(eq(aiMessages.conversationId, conversationId), eq(aiMessages.status, "pending")));
 
   const historyRows = await db
     .select({ role: aiMessages.role, content: aiMessages.content })
@@ -154,26 +172,53 @@ conversationRoutes.post("/projects/:projectId/ai/conversations/:conversationId/m
   };
 
   const encoder = new TextEncoder();
+  let settled = false;
+  const markFailed = async (message: string) => {
+    if (settled) return;
+    settled = true;
+    await db
+      .update(aiMessages)
+      .set({ content: "", status: "failed", error: message })
+      .where(and(eq(aiMessages.id, assistantId), eq(aiMessages.status, "pending")));
+  };
+
+  const abortSignal = c.req.raw.signal;
+  const onAbort = () => {
+    disposePiAgentSession(conversationId);
+    void markFailed("连接中断（开发热重载、代理断开或浏览器取消）。请新建对话或重试。");
+  };
+  abortSignal.addEventListener("abort", onAbort, { once: true });
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(encodeSse(event, data)));
+        try {
+          controller.enqueue(encoder.encode(encodeSse(event, data)));
+        } catch {
+          // Client already disconnected.
+        }
       };
       try {
         const result = await runPiAgentTurn(c.env, turn, (event: PiAgentStreamEvent) => {
           send(event.type, event);
         });
+        if (abortSignal.aborted) {
+          await markFailed("连接中断（开发热重载、代理断开或浏览器取消）。请新建对话或重试。");
+          return;
+        }
         const completedAt = new Date().toISOString();
+        const citationsJson = JSON.stringify(result.citations ?? []);
         await db
           .update(aiMessages)
           .set({
             content: result.reply,
-            citationsJson: "[]",
+            citationsJson,
             model: result.model,
             status: "completed",
             error: "",
           })
           .where(eq(aiMessages.id, assistantId));
+        settled = true;
         await db.update(aiConversations).set({ updatedAt: completedAt }).where(eq(aiConversations.id, conversationId));
         const assistant = await db.select().from(aiMessages).where(eq(aiMessages.id, assistantId)).get();
         send("done", {
@@ -184,14 +229,19 @@ conversationRoutes.post("/projects/:projectId/ai/conversations/:conversationId/m
       } catch (error) {
         const code = error instanceof AgentConfigurationError ? error.code : "PI_AGENT_FAILED";
         const message = error instanceof Error ? error.message : "Research Agent 暂时无法完成此回合";
-        await db
-          .update(aiMessages)
-          .set({ content: "", status: "failed", error: message })
-          .where(eq(aiMessages.id, assistantId));
+        await markFailed(message);
         send("error", { code, message, assistantMessageId: assistantId, retryable: true });
       } finally {
-        controller.close();
+        abortSignal.removeEventListener("abort", onAbort);
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
       }
+    },
+    cancel() {
+      onAbort();
     },
   });
 

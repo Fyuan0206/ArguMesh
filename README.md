@@ -176,6 +176,14 @@ Optional: install [Tectonic](https://tectonic-typesetting.github.io/) or `latexm
 
 ## Changelog
 
+### v3.2.4 (2026-08) — Evidence → Idea loop hardening
+- **Research Agent markdown**: assistant replies render GFM (headings, lists, tables, code) instead of raw plain text.
+- **Research Agent errors**: failed turns show the real cause (AI / network / stream interrupt); interrupted SSE no longer leaves forever-`pending` assistants; Vite `/api` proxy flushes SSE headers.
+- **Reader → Research Thread**: saving a note/evidence excerpt now persists to server knowledge (with sync retry), so insights appear on the Research Thread and are visible to the Research Agent.
+- **Research Thread write surface**: “New insight” creates finding / gap / concept drafts in the project DB (not local-only).
+- **Pi citations restored**: SSE turns store jumpable citations derived from completed whitelist tool actions (no longer always `[]`).
+- **Acknowledgments**: README thanks [StepFun](https://www.stepfun.com/) for model API support (`docs/stepfun-logo.png`).
+
 ### v3.2.3 (2026-08) — Pi as Research Agent foundation
 - Research Agent **always** runs on Pi `AgentSession` (SSE). No engine picker / dual path.
 - Full domain whitelist as Pi tools: context + insight / RQ / experiment / ablation / result analysis / paper Diff / BibTeX / LaTeX compile.
@@ -281,7 +289,26 @@ Join the WeChat group **ArguMesh | AI学术工具** to discuss the product, repo
 
 ## Reference projects
 
-Design and roadmap references (summaries + links, not vendored code): **[docs/reference-projects.md](./docs/reference-projects.md)** — [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep), [karpathy/autoresearch](https://github.com/karpathy/autoresearch), [pi-autoresearch](https://github.com/davebcn87/pi-autoresearch), [Mimir](https://github.com/1692775560/Mimir).
+Open-source projects we consulted while shaping the roadmap (summaries + links only — **not vendored**). Full comparison: **[docs/reference-projects.md](./docs/reference-projects.md)**.
+
+| Project | One-liner |
+| --- | --- |
+| [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) | Skill-driven “research while you sleep” loop: lit → idea → experiment → writing → review |
+| [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | Single-GPU agent loop that edits code, measures metrics, and keeps improvements |
+| [pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) | Autoresearch wired to the pi terminal agent (resumable `.auto/` sessions) |
+| [Mimir](https://github.com/1692775560/Mimir) | DeepSeek Harness plugin: eight-view research workbench (library / experiments / writing / meetings) |
+
+ArguMesh focuses on a **local SQLite, evidence-first object model**; these projects lean more agent / skill / auto-experiment execution — complementary, not replacements.
+
+## Acknowledgments
+
+Thanks to [StepFun (阶跃星辰)](https://www.stepfun.com/) for supporting ArguMesh with model API access during development and evaluation.
+
+<p align="center">
+  <a href="https://www.stepfun.com/">
+    <img src="./docs/stepfun-logo.png" alt="StepFun" height="48" />
+  </a>
+</p>
 
 ## License
 

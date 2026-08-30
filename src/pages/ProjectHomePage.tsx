@@ -15,6 +15,7 @@ import {
   type AiMessage,
   type ResearchThread,
 } from "../api";
+import { AgentMarkdown } from "../components/AgentMarkdown";
 import { EmptyState } from "../components/states";
 import { useWorkspace } from "../state/workspace";
 
@@ -120,8 +121,13 @@ export function ProjectHomePage() {
       });
       await loadConversation(projectId, activeId);
       const refreshed = await listAiConversations(projectId); setConversations(refreshed.conversations);
-    } catch {
-      setError("本回合失败。消息已保留，可以在下方重试；请检查 AI 配置或网络。" );
+    } catch (cause) {
+      const detail = cause instanceof Error && cause.message.trim() ? cause.message.trim() : "";
+      setError(
+        detail
+          ? `本回合失败：${detail}`
+          : "本回合失败。消息已保留，可以在下方重试；请检查 AI 配置或网络。",
+      );
       await loadConversation(projectId, activeId).catch(() => undefined);
     } finally { setSending(false); setStreamHint(""); }
   }
@@ -181,7 +187,9 @@ export function ProjectHomePage() {
             <div className="agent-message-avatar">{message.role === "assistant" ? <Brain /> : "你"}</div>
             <div className="agent-message-body">
               <header><strong>{message.role === "assistant" ? "Research Agent" : "你"}</strong>{message.model ? <small>{message.model}</small> : null}</header>
-              {message.content ? <p>{message.content}</p> : null}
+              {message.content ? (
+                message.role === "assistant" ? <AgentMarkdown content={message.content} /> : <p>{message.content}</p>
+              ) : null}
               {message.status === "failed" ? <div className="agent-failure"><span>{message.error || "本回合失败"}</span><button onClick={() => {
                 const index = messages.findIndex((item) => item.id === message.id); const previous = [...messages.slice(0, index)].reverse().find((item) => item.role === "user");
                 if (previous) void submitContent(previous.content);

@@ -130,6 +130,31 @@ describe("persistent bounded Research Agent", () => {
     expect(await response.json()).toMatchObject({ error: "CONVERSATION_CANCELLED" });
   });
 
+  it("heals stale pending assistant rows when loading a conversation", async () => {
+    const created = await app.request(`/api/projects/${projectId}/ai/conversations`, { method: "POST", headers: jsonHeaders(), body: "{}" }, context.bindings);
+    const id = ((await created.json()) as { conversation: { id: string } }).conversation.id;
+    const staleId = crypto.randomUUID();
+    await createDatabase(context.bindings).insert(aiMessages).values({
+      id: staleId,
+      conversationId: id,
+      projectId,
+      role: "assistant",
+      content: "",
+      citationsJson: "[]",
+      model: null,
+      status: "pending",
+      error: "",
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+    });
+    const detail = await app.request(`/api/projects/${projectId}/ai/conversations/${id}`, {}, context.bindings);
+    expect(detail.status).toBe(200);
+    const body = (await detail.json()) as { messages: Array<{ id: string; status: string; error: string }> };
+    expect(body.messages.find((message) => message.id === staleId)).toMatchObject({
+      status: "failed",
+      error: "回合连接中断，请重试",
+    });
+  });
+
   it("stores a paper Diff proposal without applying it", async () => {
     const created = await app.request(`/api/projects/${projectId}/ai/conversations`, { method: "POST", headers: jsonHeaders(), body: "{}" }, context.bindings);
     const id = ((await created.json()) as { conversation: { id: string } }).conversation.id;

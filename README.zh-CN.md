@@ -190,6 +190,14 @@ AI_PROVIDERS=[{"id":"stepfun","label":"StepFun","baseUrl":"https://api.stepfun.c
 
 ## 更新记录
 
+### v3.2.4（2026-08）— Evidence → Idea 闭环加固
+- **Research Agent Markdown**：助手回复按 GFM 渲染（标题、列表、表格、代码），不再整段纯文本。
+- **Research Agent 报错**：失败回合展示真实原因（AI / 网络 / 流中断）；中断的 SSE 不再留下永久 `pending` 助手消息；Vite `/api` 代理会刷新 SSE 头。
+- **阅读器 → 研究脉络**：保存笔记/证据摘录会写入服务端 knowledge（失败可重试同步），洞见会出现在研究脉络，并对 Research Agent 可见。
+- **研究脉络可写**：支持「新建洞见」，在项目库中创建发现 / 缺口 / 构想草稿（不再只写本地）。
+- **恢复 Pi 引用**：SSE 回合根据已完成的白名单工具动作生成可跳转 citations（不再恒为 `[]`）。
+- **项目致谢**：README 感谢 [阶跃星辰 / StepFun](https://www.stepfun.com/) 提供模型 API 支持（`docs/stepfun-logo.png`）。
+
 ### v3.2.3（2026-08）— Pi 作为 Research Agent 底座
 - Research Agent **始终**运行在 Pi `AgentSession`（SSE）上；无引擎切换 / 双路径。
 - 完整领域白名单作为 Pi 工具：上下文 + 洞见 / RQ / 实验 / 消融 / 结果分析 / 论文 Diff / BibTeX / LaTeX 编译。
@@ -296,7 +304,26 @@ API 测试直连 Hono 应用并为每个测试文件创建独立的临时 SQLite
 
 ## 参考项目
 
-产品与路线图对照（摘要 + 链接,未内置源码）:**[docs/reference-projects.md](./docs/reference-projects.md)** — [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep)、[karpathy/autoresearch](https://github.com/karpathy/autoresearch)、[pi-autoresearch](https://github.com/davebcn87/pi-autoresearch)、[Mimir](https://github.com/1692775560/Mimir)。
+设计路线图时对照过这些开源项目（仅摘要与链接，**未内置其源码**）。完整对照表见 **[docs/reference-projects.md](./docs/reference-projects.md)**。
+
+| 项目 | 一句话 |
+| --- | --- |
+| [ARIS](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) | Skill 驱动的「睡觉做科研」全流程：文献 → idea → 实验 → 写作 → 审稿 |
+| [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | 单卡上 agent 自主改代码、跑指标、保留改进的实验闭环 |
+| [pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) | 把 autoresearch 接到 pi 终端 agent（`.auto/` 可恢复会话） |
+| [Mimir](https://github.com/1692775560/Mimir) | DeepSeek Harness 插件：文献 / 实验 / 写作 / 组会八视图工作台 |
+
+ArguMesh 侧重**本地 SQLite + 证据优先的结构化对象**；上述项目多偏 agent / skill / 自动实验执行，可互为补充而非替代。
+
+## 项目致谢
+
+感谢 [阶跃星辰（StepFun）](https://www.stepfun.com/) 在 ArguMesh 开发与评测期间提供模型 API 支持。
+
+<p align="center">
+  <a href="https://www.stepfun.com/">
+    <img src="./docs/stepfun-logo.png" alt="阶跃星辰 StepFun" height="48" />
+  </a>
+</p>
 
 ## License
 

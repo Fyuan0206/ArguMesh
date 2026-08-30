@@ -10,9 +10,20 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://127.0.0.1:8787",
-        // Matrix extract can take several minutes for a small paper batch.
+        // Matrix extract / Research Agent SSE can run for several minutes.
         timeout: 600_000,
         proxyTimeout: 600_000,
+        configure: (proxy) => {
+          // Avoid buffering Research Agent SSE through the Vite proxy.
+          proxy.on("proxyRes", (proxyRes, _req, res) => {
+            const contentType = proxyRes.headers["content-type"];
+            if (typeof contentType === "string" && contentType.includes("text/event-stream")) {
+              res.setHeader("Cache-Control", "no-cache, no-transform");
+              res.setHeader("X-Accel-Buffering", "no");
+              res.flushHeaders?.();
+            }
+          });
+        },
       },
     },
   },
