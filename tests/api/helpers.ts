@@ -29,6 +29,9 @@ export async function createTestContext(): Promise<TestContext> {
     STEPFUN_MODEL: undefined,
     AI_MODELS: undefined,
     AI_PROVIDERS: undefined,
+    LATEX_ENGINE_PATH: undefined,
+    SEARXNG_BASE_URL: undefined,
+    SEARXNG_TIMEOUT_MS: undefined,
   };
 
   return {

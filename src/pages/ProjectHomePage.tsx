@@ -20,8 +20,11 @@ import { EmptyState } from "../components/states";
 import { useWorkspace } from "../state/workspace";
 
 const TOOL_LABELS: Record<string, string> = {
+  web_search: "网页搜索",
+  project_context: "读取项目上下文",
   insight_create_draft: "已创建研究洞见草稿",
-  research_question_create_draft: "已创建研究问题草稿", experiment_design_create_draft: "已创建实验设计草稿",
+  research_question_create_draft: "已创建研究问题草稿",
+  experiment_design_create_draft: "已创建实验设计草稿",
   result_analysis_create_draft: "已保存实验结果分析草稿",
   paper_patch_propose: "已生成论文 Diff 提案",
   research_question_link_evidence: "已关联研究问题证据",
@@ -115,7 +118,10 @@ export function ProjectHomePage() {
     setMessages((items) => [...items, optimistic]); setSending(true); setError(""); setStreamHint("Research Agent 推理中…");
     try {
       await sendAiMessage(projectId, activeId, content.trim(), (event) => {
-        if (event.type === "tool_start") setStreamHint(`工具：${String(event.toolName ?? "")}`);
+        if (event.type === "tool_start") {
+          const name = String(event.toolName ?? "");
+          setStreamHint(`工具：${TOOL_LABELS[name] ?? name}`);
+        }
         else if (event.type === "text_delta") setStreamHint("生成回复中…");
         else if (event.type === "agent_end" || event.type === "done") setStreamHint("");
       });
@@ -128,7 +134,9 @@ export function ProjectHomePage() {
           ? `本回合失败：${detail}`
           : "本回合失败。消息已保留，可以在下方重试；请检查 AI 配置或网络。",
       );
-      await loadConversation(projectId, activeId).catch(() => undefined);
+      await getAiConversation(projectId, activeId, { healPending: true })
+        .then((detail) => { setMessages(detail.messages); setActions(detail.actions); })
+        .catch(() => undefined);
     } finally { setSending(false); setStreamHint(""); }
   }
   function submit(event: React.FormEvent<HTMLFormElement>) {

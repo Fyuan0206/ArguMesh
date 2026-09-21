@@ -1123,8 +1123,25 @@ export async function createAiConversation(
     method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify({ title, mode: "research_agent" }),
   }));
 }
-export async function getAiConversation(projectId: string, conversationId: string): Promise<{ conversation: AiConversation; messages: AiMessage[]; actions: AiAction[] }> {
-  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}`, { headers: authenticatedHeaders() }));
+export async function getAiConversation(
+  projectId: string,
+  conversationId: string,
+  options?: { healPending?: boolean },
+): Promise<{ conversation: AiConversation; messages: AiMessage[]; actions: AiAction[] }> {
+  const heal = options?.healPending ? "?healPending=1" : "";
+  return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}${heal}`, { headers: authenticatedHeaders() }));
+}
+
+function mapResearchAgentClientError(cause: unknown): string {
+  const raw = cause instanceof Error ? cause.message.trim() : "";
+  if (!raw) return "";
+  if (/network error|failed to fetch|fetch failed|econnreset|econnrefused|socket hang up/i.test(raw)) {
+    return "网络连接中断（开发热重载、Vite 代理断开，或模型 API 不可达）。请确认 API 仍在运行后重试。";
+  }
+  if (raw === "RESEARCH_AGENT_STREAM_INCOMPLETE" || raw.includes("流式连接中断")) {
+    return "流式连接中断，未收到完整回复。请重试；若刚改过代码，可能是热重载断开了连接。";
+  }
+  return raw.slice(0, 500);
 }
 
 async function parseSseAiMessage(
@@ -1181,16 +1198,25 @@ export async function sendAiMessage(
   content: string,
   onEvent?: (event: { type: string; [key: string]: unknown }) => void,
 ): Promise<{ message: AiMessage; action: AiAction | null; mode: string }> {
-  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/messages`, {
-    method: "POST",
-    headers: authenticatedHeaders({ "content-type": "application/json" }),
-    body: JSON.stringify({ content }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      method: "POST",
+      headers: authenticatedHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({ content }),
+    });
+  } catch (cause) {
+    throw new Error(mapResearchAgentClientError(cause) || "网络连接中断，请重试。");
+  }
   if (!response.ok && !(response.headers.get("content-type") ?? "").includes("text/event-stream")) {
     return parseResponse(response);
   }
   if (!response.ok) throw new Error(`RESEARCH_AGENT_HTTP_${response.status}`);
-  return parseSseAiMessage(response, onEvent);
+  try {
+    return await parseSseAiMessage(response, onEvent);
+  } catch (cause) {
+    throw new Error(mapResearchAgentClientError(cause) || (cause instanceof Error ? cause.message : "本回合失败"));
+  }
 }
 export async function cancelAiConversation(projectId: string, conversationId: string): Promise<{ id: string; status: "cancelled" }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/ai/conversations/${encodeURIComponent(conversationId)}/cancel`, {

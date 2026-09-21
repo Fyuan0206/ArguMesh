@@ -37,6 +37,16 @@ function encodeSse(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
+/** Map undici / proxy / provider transport failures into a stable Chinese message. */
+export function normalizeAgentTransportError(raw: string): string {
+  const message = raw.trim();
+  if (!message) return "Research Agent 暂时无法完成此回合";
+  if (/network error|failed to fetch|fetch failed|econnreset|econnrefused|socket hang up|und_err_connect|und_err_headers_timeout|und_err_body_timeout/i.test(message)) {
+    return "网络连接中断（开发热重载、Vite 代理断开，或模型 API 不可达）。请确认 API 仍在运行后重试。";
+  }
+  return message.slice(0, 500);
+}
+
 export const conversationRoutes = new Hono<AppEnv>();
 
 conversationRoutes.get("/projects/:projectId/ai/conversations", async (c) => {
@@ -84,8 +94,10 @@ conversationRoutes.get("/projects/:projectId/ai/conversations/:conversationId", 
     .where(and(eq(aiConversations.id, conversationId), eq(aiConversations.projectId, projectId)))
     .get();
   if (!conversation) return c.json({ error: "CONVERSATION_NOT_FOUND" }, 404);
-  // Heal stale pending rows (hot-reload / killed API). Skip fresh ones so an in-flight turn is not raced.
-  const staleBefore = new Date(Date.now() - 90_000).toISOString();
+  // Heal interrupted SSE turns. `healPending=1` clears all pending (client reported disconnect);
+  // otherwise only rows older than 25s (hot-reload leftovers) so in-flight turns are not raced.
+  const healAllPending = c.req.query("healPending") === "1";
+  const staleBefore = new Date(Date.now() - 25_000).toISOString();
   await db
     .update(aiMessages)
     .set({ status: "failed", error: "回合连接中断，请重试" })
@@ -93,7 +105,7 @@ conversationRoutes.get("/projects/:projectId/ai/conversations/:conversationId", 
       and(
         eq(aiMessages.conversationId, conversationId),
         eq(aiMessages.status, "pending"),
-        lt(aiMessages.createdAt, staleBefore),
+        ...(healAllPending ? [] : [lt(aiMessages.createdAt, staleBefore)]),
       ),
     );
   const [messages, actions] = await Promise.all([
@@ -228,7 +240,8 @@ conversationRoutes.post("/projects/:projectId/ai/conversations/:conversationId/m
         });
       } catch (error) {
         const code = error instanceof AgentConfigurationError ? error.code : "PI_AGENT_FAILED";
-        const message = error instanceof Error ? error.message : "Research Agent 暂时无法完成此回合";
+        const raw = error instanceof Error ? error.message : "Research Agent 暂时无法完成此回合";
+        const message = normalizeAgentTransportError(raw);
         await markFailed(message);
         send("error", { code, message, assistantMessageId: assistantId, retryable: true });
       } finally {

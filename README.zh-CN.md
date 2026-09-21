@@ -36,7 +36,7 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 <img src="./docs/screenshots/research-agent.png" alt="Research Agent：带项目上下文的多轮对话与结构化动作" width="900" />
 
 ### 文献库
-按 DOI / arXiv / URL 导入文献(自动获取元数据),或批量上传 PDF(单文件 ≤ 25 MB)。支持阅读状态(待读 → 粗读 → 精读 → 核心文献)、收藏、标签与项目内笔记。
+按 DOI / arXiv / URL 导入文献(自动获取元数据),或批量上传 PDF(单文件 ≤ 25 MB)。支持阅读状态(待读 → 粗读 → 精读 → 核心文献)、收藏、标签与项目内笔记。列表可多选后**批量删除**(与单行删除相同:确认后永久移除 PDF、证据与关联知识,跨项目一并清理)。
 
 **文件夹同步(`literature/` 收件箱)** — 若项目已绑定本地工作文件夹(`workspacePath`),可将 PDF 放入固定子目录,在文献库一键导入:
 
@@ -167,6 +167,8 @@ pnpm start         # http://127.0.0.1:8787
 
 - `DATABASE_URL` — 默认 `file:./data/argumesh.db`;也支持远程 `libsql://` 地址
 - `AI_PROVIDERS` / `STEPFUN_*` — 环境级 AI 兜底配置(设置页的全局配置优先)
+- `SEARXNG_BASE_URL` — 可选自托管 SearXNG 根地址，供 Research Agent `web_search`（需启用 JSON 格式）
+- `SEARXNG_TIMEOUT_MS` — 可选 SearXNG 超时（默认 20000）
 
 > ⚠️ 安全提示:默认仅监听本机,且**无任何鉴权**——任何能访问该端口的人都能读写全部数据。请勿把 API 端口暴露到不可信网络。若部署到公网,务必用反向代理(如 Caddy / Nginx)提供 HTTPS 并限制网络访问。
 
@@ -189,6 +191,14 @@ AI_PROVIDERS=[{"id":"stepfun","label":"StepFun","baseUrl":"https://api.stepfun.c
 不配置 AI 时,全部人工流程(文献管理、阅读笔记、证据矩阵人工核验、研究脉络整理、实验导入与解读、论文编辑)完全可用。
 
 ## 更新记录
+
+### 文档（2026-09）— 参考项目增补
+- 参考索引新增 **[Open Science Desktop](https://github.com/ai4s-research/open-science)**、**[小绿鲸](https://www.xljsci.com/)**、**[Agentero](https://github.com/poco-ai/agentero)**（`docs/reference-projects.md` 与 README 表格同步）。
+- **文献库批量删除**：列表多选勾选 + 确认后永久删除所选文献。
+
+### v3.2.5（2026-08）— Research Agent 网页搜索
+- **`web_search` 工具**：Research Agent 可查询自托管 [SearXNG](https://docs.searxng.org/)（`SEARXNG_BASE_URL`，可选 `SEARXNG_TIMEOUT_MS`）。结果为只读外部命中（不算项目内证据）。`/api/health` 返回 `webSearch: searxng|off`。
+- **断开提示更清晰**：`network error` / 代理断开映射为中文说明；失败回合会清理卡住的 `pending` 助手消息。
 
 ### v3.2.4（2026-08）— Evidence → Idea 闭环加固
 - **Research Agent Markdown**：助手回复按 GFM 渲染（标题、列表、表格、代码），不再整段纯文本。
@@ -304,7 +314,7 @@ API 测试直连 Hono 应用并为每个测试文件创建独立的临时 SQLite
 
 ## 参考项目
 
-设计路线图时对照过这些开源项目（仅摘要与链接，**未内置其源码**）。完整对照表见 **[docs/reference-projects.md](./docs/reference-projects.md)**。
+设计路线图时对照过这些开源与商业产品（仅摘要与链接，**未内置其源码**）。完整对照表见 **[docs/reference-projects.md](./docs/reference-projects.md)**。
 
 | 项目 | 一句话 |
 | --- | --- |
@@ -312,8 +322,11 @@ API 测试直连 Hono 应用并为每个测试文件创建独立的临时 SQLite
 | [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | 单卡上 agent 自主改代码、跑指标、保留改进的实验闭环 |
 | [pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) | 把 autoresearch 接到 pi 终端 agent（`.auto/` 可恢复会话） |
 | [Mimir](https://github.com/1692775560/Mimir) | DeepSeek Harness 插件：文献 / 实验 / 写作 / 组会八视图工作台 |
+| [Open Science Desktop](https://github.com/ai4s-research/open-science)（[中文](https://github.com/ai4s-research/open-science/blob/master/README.zh.md)） | 本地优先、模型无关的 AI 科研桌面工作台（Tauri + MCP + skills） |
+| [小绿鲸](https://www.xljsci.com/) | 商业英文文献阅读器：学科翻译、速读、笔记、引用与汇报 PPT |
+| [Agentero](https://github.com/poco-ai/agentero) | Agent 原生本地文献工作台（Vault + ACP BYOA + Zotero / PDF / 双链） |
 
-ArguMesh 侧重**本地 SQLite + 证据优先的结构化对象**；上述项目多偏 agent / skill / 自动实验执行，可互为补充而非替代。
+ArguMesh 侧重**本地 SQLite + 证据优先的结构化对象**；上述多偏 agent / skill / 阅读产品 / 自动实验，可互为补充而非替代。
 
 ## 项目致谢
 

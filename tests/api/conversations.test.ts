@@ -155,6 +155,31 @@ describe("persistent bounded Research Agent", () => {
     });
   });
 
+  it("heals all pending rows when healPending=1", async () => {
+    const created = await app.request(`/api/projects/${projectId}/ai/conversations`, { method: "POST", headers: jsonHeaders(), body: "{}" }, context.bindings);
+    const id = ((await created.json()) as { conversation: { id: string } }).conversation.id;
+    const freshId = crypto.randomUUID();
+    await createDatabase(context.bindings).insert(aiMessages).values({
+      id: freshId,
+      conversationId: id,
+      projectId,
+      role: "assistant",
+      content: "",
+      citationsJson: "[]",
+      model: null,
+      status: "pending",
+      error: "",
+      createdAt: new Date().toISOString(),
+    });
+    const detail = await app.request(`/api/projects/${projectId}/ai/conversations/${id}?healPending=1`, {}, context.bindings);
+    expect(detail.status).toBe(200);
+    const body = (await detail.json()) as { messages: Array<{ id: string; status: string; error: string }> };
+    expect(body.messages.find((message) => message.id === freshId)).toMatchObject({
+      status: "failed",
+      error: "回合连接中断，请重试",
+    });
+  });
+
   it("stores a paper Diff proposal without applying it", async () => {
     const created = await app.request(`/api/projects/${projectId}/ai/conversations`, { method: "POST", headers: jsonHeaders(), body: "{}" }, context.bindings);
     const id = ((await created.json()) as { conversation: { id: string } }).conversation.id;

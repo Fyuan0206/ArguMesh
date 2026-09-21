@@ -1,7 +1,7 @@
 # 参考项目索引
 
-> 记录 ArguMesh 产品/架构设计时可对照的开源项目。  
-> 首次整理：**2026-08-27**
+> 记录 ArguMesh 产品/架构设计时可对照的开源与商业产品。  
+> 首次整理：**2026-08-27** · 增补：**2026-09-13**（Open Science Desktop / 小绿鲸 / Agentero）
 
 | 项目 | 链接 | 一句话 |
 | --- | --- | --- |
@@ -9,6 +9,9 @@
 | **autoresearch** | [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | 单 GPU 上 AI agent 自主跑实验、测指标、保留改进 |
 | **pi-autoresearch** | [davebcn87/pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) | 把 autoresearch 循环接到 pi 终端 agent（`.auto/` 会话文件） |
 | **Mimir** | [1692775560/Mimir](https://github.com/1692775560/Mimir) | DeepSeek Harness 插件：八视图研究工作台（文献·实验·写作·组会） |
+| **Open Science Desktop** | [ai4s-research/open-science](https://github.com/ai4s-research/open-science) · [中文 README](https://github.com/ai4s-research/open-science/blob/master/README.zh.md) · [官网](https://openedscience.com/) | 本地优先、模型无关的 AI 科研桌面工作台（Tauri + MCP + skills；Claude Science 开源替代） |
+| **小绿鲸** | [xljsci.com](https://www.xljsci.com/) | 商业英文文献阅读器：学科翻译、速读、笔记、引用与汇报 PPT（云端多端） |
+| **Agentero** | [poco-ai/agentero](https://github.com/poco-ai/agentero) · [官网](https://agentero.poco-ai.com) | Agent 原生本地文献工作台：Vault + ACP BYOA + Zotero/PDF/双链笔记 |
 
 ---
 
@@ -67,22 +70,55 @@
 
 ---
 
-## 对照 ArguMesh 现状（2026-08）
+## 5. Open Science Desktop（ai4s-research/open-science）
 
-| 能力 | ArguMesh | ARIS | autoresearch / pi-autoresearch | Mimir |
-| --- | --- | --- | --- | --- |
-| 本地优先 / 无账号 | ✅ SQLite | ✅ skill 文件 | ✅ 本地 git + `.auto/` | ⚠️ 依赖 dsh |
-| 文献库 + PDF | ✅ | skill | — | ✅ Library |
-| 证据矩阵 + 人工核验 | ✅ 核心 | 部分（audit skills） | — | 部分 |
-| 实验「执行」 | ❌ 只导入/分析 | ✅ bridge/queue | ✅ 核心 | ✅ Servers |
-| LaTeX 写作 | ✅ workspace | ✅ paper skills | — | ✅ Paper |
-| Agent 多轮 + 结构化动作 | ✅ Research Agent | ✅ 80+ skills | ✅ autoresearch loop | ✅ slash + tools |
-| 睡觉/无人值守 pipeline | 部分（任务中心） | ✅ 核心 | ✅ 核心 | 部分 |
+- **定位**：本地优先、模型无关的 **AI 科研桌面工作台**（macOS / Windows / Linux）；开源替代 Claude Science 一类产品。站点：[openedscience.com](https://openedscience.com/)，中文说明见仓库 [`README.zh.md`](https://github.com/ai4s-research/open-science/blob/master/README.zh.md)。
+- **核心机制**：Tauri 桌面壳 + MCP + agent skills；把智能体、笔记本、文件、图表、报告、运行记录与审查连成**可审计、可复现**的桌面工作流；支持 ACP 双向驱动（本应用内跑 Codex / Claude Code 等，或从 Zed 等驱动本工作台）；另有无头 `osd` CLI / 网关。
+- **典型能力**：端到端科研闭环（探索→综述→实验→写作）、run record 溯源、分屏多模型会话、浏览器控制、项目级记忆、ResearchClawBench 等评测语境。
+- **与 ArguMesh 的关系**：
+  - 同属「本地优先科研工作台」赛道；Open Science 更偏 **agent + notebook + 可复现实验执行**，ArguMesh 更偏 **证据对象 + 矩阵核验 + 单用户 SQLite Web**。
+  - 可借鉴：工件溯源 / run record、ACP 互操作、skills 包形态、无头 `osd` 驱动与网关访问。
+  - **分发形态实测（2026-09-20）**：v0.5.2（2026-09-08）、1670 stars；Windows 主力资产为 NSIS `x64-setup.exe`（77.4 MB，占该版本下载量 67%），`nsis.installMode: "currentUser"` 按用户安装免管理员；Windows/Linux 未签名，仅 macOS 签名公证。**「让用户下载」的完整调研与 ArguMesh 打包路线见 [`DISTRIBUTION-RESEARCH-2026-09-20.md`](./DISTRIBUTION-RESEARCH-2026-09-20.md)。**
+
+---
+
+## 6. 小绿鲸（xljsci.com）
+
+- **定位**：**商业**英文文献阅读器（桌面 / 平板 / Web 多端），面向 SCI 阅读效率：翻译、速读、笔记、管理、写作与汇报。官网：[www.xljsci.com](https://www.xljsci.com/)。
+- **典型能力**：划词 / 学科 / 全文 / 截图翻译；AI 提炼要点与思维导图、图表解读、边读边问；术语库与笔记模板；题录 / 文件夹 / 标签；Word/WPS 一键引用；AI 文献汇报 PPT；参考/引证/相似文献；ISO 27001 / 27701 安全宣传。
+- **与 ArguMesh 的关系**：
+  - 重叠在 **阅读器体验**（翻译、划词问答、笔记、文献管理）；小绿鲸是云端产品闭环，ArguMesh 是本地证据工作台。
+  - 可借鉴：学科术语翻译 UX、速读六要点、汇报 PPT 模板、引用插件与多端同步的产品预期（ArguMesh 不必照搬云端架构）。
+
+---
+
+## 7. Agentero（poco-ai/agentero）
+
+- **定位**：Agent 时代的 **本地优先** 文献工作台；强调 Agent 友好 / Agent 原生的文献管理（Context is everything）。[GitHub](https://github.com/poco-ai/agentero) · [agentero.poco-ai.com](https://agentero.poco-ai.com)。
+- **核心机制**：Tauri 2 + React；本地 **Vault** 为事实来源；通过 **ACP** 接入本机 Agent（BYOA，不锁定模型）；兼容 Zotero 导入/导出；内置 CLI 与 MCP。
+- **典型能力**：Cool Papers / 魔搭 / RSS / 推荐导入；PDF 分屏阅读 + 划词对话 / 翻译 / 高亮；Markdown 双链笔记；Skill 安装；S3 兼容同步与 SSH 远程 Vault。
+- **与 ArguMesh 的关系**：
+  - 文献库 + PDF 阅读 + Agent 协作重叠高；Agentero 以 **桌面 Vault + ACP Host** 为中心，ArguMesh 以 **Web + SQLite 证据对象（Matrix / RQ / Idea）** 为中心。
+  - 可借鉴：ACP BYOA、Vault/Catalog 本地事实源、Zotero 互通、划词对话与 Skill 市场形态。
+
+---
+
+## 对照 ArguMesh 现状（2026-09）
+
+| 能力 | ArguMesh | ARIS | autoresearch / pi-autoresearch | Mimir | Open Science | 小绿鲸 | Agentero |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 本地优先 / 无账号 | ✅ SQLite | ✅ skill 文件 | ✅ 本地 git + `.auto/` | ⚠️ 依赖 dsh | ✅ 本地文件夹 | ❌ 云端账号 | ✅ Vault + SQLite catalog |
+| 文献库 + PDF | ✅ | skill | — | ✅ Library | ✅ | ✅ 核心 | ✅ 核心 |
+| 证据矩阵 + 人工核验 | ✅ 核心 | 部分（audit skills） | — | 部分 | 部分（可审计工件） | — | — |
+| 实验「执行」 | ❌ 只导入/分析 | ✅ bridge/queue | ✅ 核心 | ✅ Servers | ✅ runs / Slurm 等 | — | — |
+| LaTeX / 写作 | ✅ workspace | ✅ paper skills | — | ✅ Paper | ✅ 报告/写作 | 引用 + PPT | BibTeX 导出 |
+| Agent 多轮 + 结构化动作 | ✅ Research Agent | ✅ 80+ skills | ✅ autoresearch loop | ✅ slash + tools | ✅ ACP + skills | AI 问答（产品内） | ✅ ACP BYOA |
+| 睡觉/无人值守 pipeline | 部分（任务中心） | ✅ 核心 | ✅ 核心 | 部分 | ✅ 自主 agent / 无头 osd | — | 部分 |
 
 ---
 
 ## 本地镜像说明
 
-- 未 vendoring 上述仓库源码；仅在本文件保留链接与摘要。
-- 若需离线阅读 ARIS 中文 README，可 clone 后查看仓库根目录 `README_CN.md`。
+- 未 vendoring 上述仓库源码；仅在本文件保留链接与摘要。小绿鲸为商业产品，无开源仓库。
+- 若需离线阅读 ARIS 中文 README，可 clone 后查看仓库根目录 `README_CN.md`；Open Science 见 `README.zh.md`。
 - 更新本索引时：补充「可借鉴点」与 ArguMesh 差异，并在 `README.md` / `README.zh-CN.md` 的参考项目小节加一行链接（若有对外暴露需求）。

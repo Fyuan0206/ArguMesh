@@ -21,6 +21,7 @@ import {
   executeWhitelistedAgentAction,
   type AgentTurnInput,
 } from "./research-agent";
+import { searchWeb } from "./web-search";
 
 export type PiAgentStreamEvent =
   | { type: "text_delta"; delta: string }
@@ -45,6 +46,7 @@ const sessionCache = new Map<string, CachedSession>();
 
 const TOOL_NAMES = [
   "project_context",
+  "web_search",
   "insight_create_draft",
   "research_question_create_draft",
   "research_question_link_evidence",
@@ -134,6 +136,37 @@ function buildDomainTools(env: AppBindings, state: SessionState) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify(summarizeContext(context)) }],
           details: {},
+        };
+      },
+    }),
+    defineTool({
+      name: "web_search",
+      label: "Web search",
+      description:
+        "Search the public web via self-hosted SearXNG for recent papers, benchmarks, docs, or claims. " +
+        "Use only when project_context is insufficient. Results are external and unverified — do not treat them as confirmed project evidence. " +
+        "If the tool reports WEB_SEARCH_NOT_CONFIGURED, tell the user to set SEARXNG_BASE_URL.",
+      parameters: Type.Object({
+        query: Type.String({ minLength: 2, maxLength: 300 }),
+        maxResults: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
+        categories: Type.Optional(
+          Type.String({
+            maxLength: 80,
+            description: 'SearXNG categories, e.g. "general", "science", "it"',
+          }),
+        ),
+        language: Type.Optional(Type.String({ maxLength: 16, description: 'e.g. "en", "zh", "auto"' })),
+      }),
+      execute: async (_toolCallId, params) => {
+        const result = await searchWeb(env, {
+          query: params.query,
+          maxResults: params.maxResults,
+          categories: params.categories,
+          language: params.language,
+        });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          details: result,
         };
       },
     }),
@@ -374,10 +407,12 @@ async function getOrCreateSession(
         "You are ArguMesh Research Agent — the project-scoped research assistant built on the Pi AgentSession substrate.",
         "Evidence first: do not invent papers, metrics, or experiment results.",
         "Call project_context before making project-specific claims when unsure.",
+        "Use web_search only for external literature/web facts missing from the project; label those hits as external and unverified.",
         "Writes must stay drafts via the domain tools listed below; never claim confirmation or silent overwrite.",
         "Available write tools: insight_create_draft, research_question_create_draft, research_question_link_evidence,",
         "experiment_design_create_draft, ablation_design_add, result_analysis_create_draft,",
         "paper_patch_propose, bibliography_entry_propose, latex_compile.",
+        "Read tools: project_context, web_search (requires SEARXNG_BASE_URL).",
         "You have no shell, filesystem write, or code execution tools.",
         "Reply in the user's language. Cite project object ids when relevant.",
       ].join("\n"),

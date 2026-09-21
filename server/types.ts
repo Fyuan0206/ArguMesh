@@ -12,6 +12,13 @@ export interface AppBindings {
   AI_PROVIDERS?: string;
   /** 可选 LaTeX 引擎绝对路径；仅允许 tectonic/latexmk 可执行文件。 */
   LATEX_ENGINE_PATH?: string;
+  /**
+   * 可选自托管 SearXNG 根地址（如 http://127.0.0.1:8080）。
+   * 配置后 Research Agent 可用 web_search 工具；需在 SearXNG 启用 formats.json。
+   */
+  SEARXNG_BASE_URL?: string;
+  /** SearXNG 请求超时毫秒（默认 20000，最大 60000）。 */
+  SEARXNG_TIMEOUT_MS?: string;
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "argumesh",
-  "version": "3.2.4",
+  "version": "3.2.5",
   "private": true,
   "type": "module",
   "description": "ArguMesh 论脉 — 把证据连成研究脉络的本地研究工作台(开源版)",
@@ -39,6 +39,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.5",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
@@ -46,6 +47,7 @@
     "concurrently": "^9.2.0",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "0.25.4",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^15.11.7",
     "tsx": "^4.20.6",

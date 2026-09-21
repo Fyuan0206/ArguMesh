@@ -38,7 +38,7 @@ The project home is a persistent **Research Agent** built on the [Pi](https://pi
 <img src="./docs/screenshots/research-agent.png" alt="Research Agent — project-aware multi-turn AI with structured actions" width="900" />
 
 ### Literature library
-Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 核心文献), favorites, tags, and per-project notes.
+Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 核心文献), favorites, tags, and per-project notes. Select multiple papers in the list to **batch-delete** them (same permanent delete as the per-row action: removes PDF, evidence, and linked knowledge across projects after confirm).
 
 **Folder sync (`literature/` inbox)** — if the project has a bound local workspace folder (`workspacePath`), you can drop PDFs into a fixed subfolder and import them in one click:
 
@@ -169,12 +169,22 @@ All configuration is optional — see `.env.example`:
 
 - `DATABASE_URL` — defaults to `file:./data/argumesh.db`; remote `libsql://` URLs also work
 - `AI_PROVIDERS` / `STEPFUN_*` — environment-level AI fallback (the Settings page global config takes precedence)
+- `SEARXNG_BASE_URL` — optional self-hosted SearXNG root URL for Research Agent `web_search` (JSON format must be enabled)
+- `SEARXNG_TIMEOUT_MS` — optional SearXNG timeout (default 20000)
 
 > ⚠️ By default ArguMesh listens on localhost only with **no authentication**. Do not expose the API port to untrusted networks. For a public deployment, restrict network access and put HTTPS in front (e.g. Caddy / Nginx).
 
 Optional: install [Tectonic](https://tectonic-typesetting.github.io/) or `latexmk` on the machine if you want in-app LaTeX compile + PDF preview.
 
 ## Changelog
+
+### Docs (2026-09) — Reference projects
+- Expanded the reference index with **[Open Science Desktop](https://github.com/ai4s-research/open-science)**, **[小绿鲸](https://www.xljsci.com/)**, and **[Agentero](https://github.com/poco-ai/agentero)** (`docs/reference-projects.md` + README tables).
+- **Library batch delete**: multi-select checkboxes on the literature list + confirm to permanently delete selected papers.
+
+### v3.2.5 (2026-08) — Research Agent web search
+- **`web_search` tool**: Research Agent can query a self-hosted [SearXNG](https://docs.searxng.org/) instance (`SEARXNG_BASE_URL`, optional `SEARXNG_TIMEOUT_MS`). Results are read-only external hits (not project evidence). `/api/health` reports `webSearch: searxng|off`.
+- **Clearer turn disconnects**: opaque `network error` / proxy drops map to a Chinese hint; failed turns force-heal stuck `pending` assistants.
 
 ### v3.2.4 (2026-08) — Evidence → Idea loop hardening
 - **Research Agent markdown**: assistant replies render GFM (headings, lists, tables, code) instead of raw plain text.
@@ -289,7 +299,7 @@ Join the WeChat group **ArguMesh | AI学术工具** to discuss the product, repo
 
 ## Reference projects
 
-Open-source projects we consulted while shaping the roadmap (summaries + links only — **not vendored**). Full comparison: **[docs/reference-projects.md](./docs/reference-projects.md)**.
+Projects and products we consulted while shaping the roadmap (summaries + links only — **not vendored**). Full comparison: **[docs/reference-projects.md](./docs/reference-projects.md)**.
 
 | Project | One-liner |
 | --- | --- |
@@ -297,8 +307,11 @@ Open-source projects we consulted while shaping the roadmap (summaries + links o
 | [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | Single-GPU agent loop that edits code, measures metrics, and keeps improvements |
 | [pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) | Autoresearch wired to the pi terminal agent (resumable `.auto/` sessions) |
 | [Mimir](https://github.com/1692775560/Mimir) | DeepSeek Harness plugin: eight-view research workbench (library / experiments / writing / meetings) |
+| [Open Science Desktop](https://github.com/ai4s-research/open-science) ([中文](https://github.com/ai4s-research/open-science/blob/master/README.zh.md)) | Local-first, model-agnostic AI research desktop (Tauri + MCP + skills; open Claude Science alternative) |
+| [小绿鲸](https://www.xljsci.com/) | Commercial English literature reader: domain translation, skimming, notes, citations, report PPT |
+| [Agentero](https://github.com/poco-ai/agentero) | Agent-native local literature workbench (Vault + ACP BYOA + Zotero / PDF / wikilinks) |
 
-ArguMesh focuses on a **local SQLite, evidence-first object model**; these projects lean more agent / skill / auto-experiment execution — complementary, not replacements.
+ArguMesh focuses on a **local SQLite, evidence-first object model**; these lean more agent / skill / reading-product / auto-experiment — complementary, not replacements.
 
 ## Acknowledgments
 

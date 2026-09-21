@@ -22,6 +22,7 @@ import { systemRoutes } from "./routes/system";
 import { conversationRoutes } from "./routes/conversations";
 import { writingRoutes } from "./routes/writing";
 import { getAiProviders } from "./services/ai";
+import { isWebSearchConfigured } from "./services/web-search";
 import type { AppEnv } from "./types";
 
 const app = new Hono<AppEnv>();
@@ -38,6 +39,7 @@ app.get("/api/health", (c) =>
     model: c.env.STEPFUN_MODEL,
     models: (c.env.AI_MODELS ?? c.env.STEPFUN_MODEL ?? "").split(",").map((item) => item.trim()).filter(Boolean),
     providers: getAiProviders(c.env).map((p) => ({ id: p.id, label: p.label, models: p.models })),
+    webSearch: isWebSearchConfigured(c.env) ? "searxng" : "off",
   }),
 );
 

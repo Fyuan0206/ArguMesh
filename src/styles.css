@@ -1039,6 +1039,12 @@ mark { background: #ffe39a; padding: 1px 2px; }
 .literature-resolver input, .tag-input { min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; background: #fff; }
 .form-error { color: #9f3e38; margin: 8px 0; font-size: 13px; }
 .library-scan-note { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: rgba(0, 168, 181, 0.08); color: var(--accent-dark); font-size: 13px; line-height: 1.5; }
+.library-batch-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #f7f9fa; }
+.library-batch-bar strong { font-size: 12px; color: #344652; }
+.library-batch-bar .danger-button { min-height: 34px; padding: 0 12px; color: #9f3e38; border-color: rgba(159, 62, 56, 0.35); }
+.data-table .col-check { width: 40px; padding-right: 0; vertical-align: middle; }
+.data-table .col-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.data-table tr.is-selected td { background: rgba(0, 168, 181, 0.06); }
 /* 修复:paper-card-editor p(灰色 10px)特异性高于 .form-error,把生成错误显示成了灰字小字 */
 .paper-card-editor .card-gen-error { display:flex; align-items:flex-start; gap:6px; padding:10px 12px; border:1px solid #e3b4b0; border-radius:7px; color:#9f3e38; background:#fdf3f2; font-size:12px; font-weight:600; line-height:1.5; }
 .paper-card-editor .card-gen-error svg { flex-shrink:0; margin-top:1px; }
