@@ -14,6 +14,16 @@ dist/
 build/
 *.tsbuildinfo
 
+# --- Tauri 桌面壳（src-tauri/）---
+# target/ 是 Rust 构建目录，实测 2 GB 起；gen/schemas 由 tauri build 生成。
+# 两者都不进仓库：源码（src/main.rs、tauri.conf.json、Cargo.toml、icons/、Cargo.lock）
+# 已足以复现构建，先跑 `pnpm run build` + `pnpm run build:sidecar` 再 `pnpm tauri build`。
+src-tauri/target/
+src-tauri/gen/
+
+# --- 临时草稿 / 调试探针 ---
+tmp/
+
 # --- 本地运行数据（SQLite、上传的 PDF、会话密钥） ---
 data/
 backups/

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ArguMesh",
+  "version": "3.2.5",
+  "identifier": "com.argumesh.desktop",
+  "build": {
+    "frontendDist": "../src-tauri/assets",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ArguMesh 论脉",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 640,
+        "center": true,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "category": "Productivity",
+    "shortDescription": "把证据连成研究脉络的本地研究工作台",
+    "longDescription": "ArguMesh 论脉:文献 → 证据矩阵 → 研究脉络 → 实验 → 写作 的本地优先研究工作台。数据存在本机 SQLite,AI 配置由用户自备。",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "SimpChinese"]
+      }
+    },
+    "resources": {
+      "../build/sidecar/server.mjs": "sidecar/server.mjs",
+      "../build/sidecar/node.exe": "sidecar/node.exe",
+      "../build/sidecar/.env.example": "sidecar/.env.example",
+      "../build/sidecar/README.txt": "sidecar/README.txt",
+      "../build/sidecar/template/argumesh.db": "sidecar/template/argumesh.db",
+      "../build/sidecar/node_modules/@libsql/win32-x64-msvc/*": "sidecar/node_modules/@libsql/win32-x64-msvc/",
+      "../build/sidecar/dist/*": "sidecar/dist/",
+      "../build/sidecar/dist/assets/*": "sidecar/dist/assets/"
+    },
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
+  }
+}

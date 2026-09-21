@@ -10,6 +10,7 @@
     "dev:api": "node --watch --import tsx server/node.ts",
     "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:sidecar": "node scripts/build-sidecar.mjs",
     "start": "tsx server/node.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

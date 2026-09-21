@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ArguMesh 论脉</title>
+    <style>
+      :root {
+        --nav: #101d27;
+        --surface: #f6f8f9;
+        --text: #16232b;
+        --muted: #5b6b75;
+        --accent: #2dc4d8;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        place-items: center;
+        background: var(--surface);
+        color: var(--text);
+        font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      }
+      main { text-align: center; padding: 32px; max-width: 560px; }
+      img { width: 72px; height: 72px; display: block; margin: 0 auto 20px; }
+      h1 { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+      #status { color: var(--muted); margin: 0; }
+      #detail {
+        display: none;
+        margin-top: 18px;
+        padding: 12px 14px;
+        text-align: left;
+        white-space: pre-wrap;
+        background: #fff;
+        border: 1px solid #e2e8ea;
+        border-left: 3px solid #d9534f;
+        border-radius: 6px;
+        color: #8a2b28;
+        font-family: Consolas, "Cascadia Mono", monospace;
+        font-size: 12px;
+      }
+      #detail:not(:empty) { display: block; }
+      #spinner {
+        width: 22px; height: 22px; margin: 22px auto 0;
+        border: 2px solid #d6dee2; border-top-color: var(--accent);
+        border-radius: 50%; animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #spinner { animation-duration: 3s; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="argumesh-mark.svg" alt="" width="72" height="72" />
+      <h1>ArguMesh 论脉</h1>
+      <p id="status">正在启动本地服务…</p>
+      <div id="spinner"></div>
+      <div id="detail"></div>
+    </main>
+    <!--
+      这一页只是占位:sidecar 起来后,src-tauri/src/main.rs 会把整个窗口
+      location.replace 到 http://127.0.0.1:<port>/。真正的应用由 server.mjs 提供。
+      这里刻意不写任何业务 UI —— 壳是薄的,前端只有一份(在 sidecar 的 dist/ 里)。
+    -->
+  </body>
+</html>
