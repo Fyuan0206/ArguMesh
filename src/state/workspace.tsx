@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import * as api from "../api";
+import type { PageRect } from "../pdf/selection";
 
 /**
  * 后台同步队列:本地状态先写,API 调用失败时入队,顶部横幅提示重试。
@@ -93,6 +94,8 @@ export interface ReaderExcerpt {
   note: string;
   kind: "note" | "evidence" | "highlight";
   color?: string;
+  // PDF 页面单位(scale 无关)的选区矩形,用于在原文上重绘高亮;旧数据无此字段。
+  rects?: PageRect[];
   createdAt: string;
 }
 

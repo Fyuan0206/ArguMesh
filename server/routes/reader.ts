@@ -32,8 +32,18 @@ const translateSchema = z.object({
 });
 
 readerRoutes.post("/reader/translate", async (c) => {
-  const parsed = translateSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "INVALID_TRANSLATION", message: "请选择要翻译的原文" }, 400);
+  const body = await c.req.json().catch(() => null);
+  const parsed = translateSchema.safeParse(body);
+  if (!parsed.success) {
+    // 空选区与超长选区必须分开提示:整页/整段选中是常见误操作,
+    // 拿"请选择要翻译的原文"回应一个 9000 字符的选区会让人以为选区没被识别。
+    const rawText = typeof (body as { text?: unknown } | null)?.text === "string" ? (body as { text: string }).text.trim() : "";
+    const tooLong = rawText.length > 8_000;
+    return c.json({
+      error: "INVALID_TRANSLATION",
+      message: tooLong ? "一次最多翻译 8000 个字符,请缩小选区后重试。" : "请选择要翻译的原文",
+    }, 400);
+  }
   const resolution = await resolveAiForRequest(c.env, {
     provider: parsed.data.provider?.trim() || undefined,
     model: parsed.data.model?.trim() || undefined,

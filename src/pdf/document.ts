@@ -86,6 +86,25 @@ export async function extractPdfText(blob: Blob, paperId: string, options: { max
   }
 }
 
+export interface CurrentPageText {
+  text: string;
+  source: "native" | "ocr" | "empty";
+}
+
+/**
+ * 取"当前这一页"用于双语对照的文本。判定阈值(原生文本 ≥40 字符)必须与 `extractPdfText`
+ * 和 ReaderPage 的全文搜索保持一致,否则"哪些页算有文字层"会有三种互相矛盾的答案。
+ * 两者都没有时返回 `empty` —— 调用方据此引导用户先 OCR,而不是拿一段乱码去翻译。
+ */
+export async function currentPageText(page: PDFPageProxy, paperId: string): Promise<CurrentPageText> {
+  const native = (await pageText(page)).trim();
+  if (native.length >= 40) return { text: native, source: "native" };
+  const storedOcr = await getPaperPageTexts(paperId);
+  const ocr = (storedOcr[page.pageNumber] ?? "").trim();
+  if (ocr.length >= 40) return { text: ocr, source: "ocr" };
+  return { text: "", source: "empty" };
+}
+
 export async function recognizePdfPage(page: PDFPageProxy, paperId: string, onProgress?: (progress: number) => void) {
   const viewport = page.getViewport({ scale: 2 });
   const canvas = window.document.createElement("canvas");

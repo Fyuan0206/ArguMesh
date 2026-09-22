@@ -60,7 +60,13 @@ API: `POST /api/projects/:projectId/library/scan-inbox` (requires `workspacePath
 <img src="./docs/screenshots/library.png" alt="Literature library — papers, reading status, and Paper Card shortcuts" width="900" />
 
 ### PDF reader with structured annotations
-Built-in PDF reader with OCR. Select any passage and save it as a Note, Claim, or Evidence — the paper reference and page number stay attached. Ask the AI about a passage: only the text you selected, its page number, and your question are sent to the model — never the whole document.
+Built-in PDF reader with OCR. **Select any passage and a floating bubble appears right at the selection** with 翻译 / 高亮 / 笔记 / 证据 one tap away:
+
+- **划词翻译** — the translation renders inline in the bubble (the sidebar card keeps the last result). Only the selected text, its page, and the paper title are sent — never the whole document. Repeating a selection is free: it is served from an in-memory cache. One call covers up to 8,000 characters — a sentence or a paragraph, not a whole page; an over-long selection is refused with an explicit message (and the sidebar character counter turns red) instead of being silently truncated. This is a per-selection translator, not a whole-document one: to read a full page, translate it section by section.
+- **原文高亮 + 锚定批注** — highlights, notes, and evidence are painted onto the PDF page as coloured marks anchored to the exact words. Marks are stored in PDF page units, so they stay in place across zoom, page turns, and reloads. Click a mark to jump back to its note in the sidebar.
+- **双语对照(左英文 / 右中文)** — the sidebar's 对照 tab splits the **current page** into ~400-character passages and shows the English above a slot for each translation. Nothing is sent until you press **翻译本页**: the page runs 3 passages at a time, with a live `已完成 x / y 段` counter and a cancel button (cancelling keeps — and caches — whatever already finished). Press **宽屏对照** to hide the sidebar and read PDF ≈55% / translation ≈45%. Translations are cached per paper + page + language in IndexedDB, so flipping back to a page you already read is instant and free; the cache stores the source text of every passage and re-validates it, so replacing the PDF can never show the previous paper's translation. This is **per-page**, not whole-document: turn the page and press the button again. Scanned PDFs get an inline **OCR 本页** button instead of a dead end. Click any English passage to drop it into the sidebar's selection box and switch back to 批注, where 高亮 / 笔记 / 证据 work as usual.
+
+Saving a selection as a Note, Claim, or Evidence keeps the paper reference and page number attached. Ask the AI about a passage: only the text you selected, its page number, and your question are sent to the model — never the whole document.
 
 <img src="./docs/screenshots/reader.png" alt="PDF reader — page view, selection, notes, and grounded Q&A" width="900" />
 
@@ -114,7 +120,7 @@ Configure a single OpenAI-compatible endpoint in Settings — Base URL (default 
 | --- | --- |
 | Papers scattered across folders, browsers, and note apps | Projects scope topics and their literature; search, filters, and tags keep them organized; **`literature/` folder sync** imports PDFs from a bound workspace without manual upload |
 | Highlights and summaries never get reused | The reader saves selections as Note / Claim / Evidence with paper + page attached |
-| Uploading whole PDFs to AI makes answers unverifiable | Reader Q&A submits only your selected passage, its page, and your question |
+| Uploading whole PDFs to AI makes answers unverifiable | Reader Q&A submits only your selected passage, its page, and your question; bilingual 对照 submits only the current page's passages, and only after you press 翻译本页 — never the whole document |
 | Manual spreadsheets make paper comparison inconsistent | The Evidence Matrix standardizes dimensions; every cell carries source, confidence, and verification state |
 | Notes, gaps, ideas, and questions live in separate tools | Research Thread unifies insights and research questions with provenance |
 | Experiments and writing are disconnected from evidence | Experiment analysis and LaTeX writing cite project evidence and can jump back into the workspace |
@@ -180,6 +186,8 @@ Optional: install [Tectonic](https://tectonic-typesetting.github.io/) or `latexm
 
 ### Docs (2026-09) — Reference projects
 - Expanded the reference index with **[Open Science Desktop](https://github.com/ai4s-research/open-science)**, **[小绿鲸](https://www.xljsci.com/)**, and **[Agentero](https://github.com/poco-ai/agentero)** (`docs/reference-projects.md` + README tables).
+- **Reader: selection bubble + on-page highlights** (borrowed from 小绿鲸): selecting PDF text opens a floating bubble at the selection — inline 划词翻译 (cached per sentence), 高亮 / 笔记 / 证据 saved as coloured marks painted onto the page. Marks are stored in PDF page units so they survive zoom, page turns, and reload; click a mark to reopen its note.
+- **Reader: 双语对照 (bilingual side-by-side)**: the sidebar's 对照 tab splits the current page into ~400-character passages (lossless, deterministic) and translates them on an explicit 翻译本页 click — 3 at a time, with progress and cancel. 宽屏对照 hides the sidebar for a 55/45 PDF/translation split. Results are cached per paper + page + language in IndexedDB and re-validated against the stored source text, so a replaced PDF never shows a stale translation.
 - **Library batch delete**: multi-select checkboxes on the literature list + confirm to permanently delete selected papers.
 
 ### v3.2.5 (2026-08) — Research Agent web search

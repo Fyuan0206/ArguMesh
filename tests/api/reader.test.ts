@@ -66,3 +66,37 @@ describe("POST /api/reader/ask (no AI configured)", () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe("POST /api/reader/translate", () => {
+  const translateBody = {
+    text: "This sentence is long enough to pass the translation schema validation.",
+    targetLanguage: "中文",
+    paperTitle: "测试论文",
+    page: 1,
+  };
+
+  it("rejects a missing selection with 400", async () => {
+    const response = await app.request(
+      "http://localhost/api/reader/translate",
+      { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ ...translateBody, text: " " }) },
+      ctx.bindings,
+    );
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { error?: string };
+    expect(payload.error).toBe("INVALID_TRANSLATION");
+  });
+
+  it("distinguishes an over-long selection from an empty one", async () => {
+    // 整页/整段拖选会超出 8000 字符;这时必须说"超出上限",
+    // 而不是复用空选区的"请选择要翻译的原文"——那会让人以为选区没被识别。
+    const response = await app.request(
+      "http://localhost/api/reader/translate",
+      { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ ...translateBody, text: "x".repeat(8_001) }) },
+      ctx.bindings,
+    );
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { error?: string; message?: string };
+    expect(payload.error).toBe("INVALID_TRANSLATION");
+    expect(payload.message).toContain("8000");
+  });
+});

@@ -917,6 +917,13 @@ mark { background: #ffe39a; padding: 1px 2px; }
 .pdf-page .textLayer .markedContent { top:0; height:0; }
 .pdf-page .textLayer .endOfContent { display:block; position:absolute; inset:100% 0 0; user-select:none; }
 .pdf-page .textLayer ::selection { background:rgba(11,164,190,.34); }
+/* 原文高亮层:盖在 textLayer 之上,自身不吃事件,只有色块可点(点色块=编辑该批注)。 */
+.pdf-page .highlight-layer { position:absolute; inset:0; z-index:3; pointer-events:none; }
+.pdf-page .mark { position:absolute; border-radius:2px; mix-blend-mode:multiply; cursor:pointer; pointer-events:auto; }
+.pdf-page .mark:hover { outline:1px solid rgba(7,136,162,.75); }
+.pdf-page .mark-highlight { background:rgba(213,168,43,.38); }
+.pdf-page .mark-note { background:rgba(7,136,162,.28); }
+.pdf-page .mark-evidence { background:rgba(47,139,104,.3); }
 .reader-route-loading { min-height:100vh; display:grid; place-items:center; color:var(--muted); background:#e8edef; font-size:12px; }
 .reader-ai { min-height:0; overflow:auto; padding:18px; background:#f8fafb; }
 .reader-ai-intro { display:flex; align-items:center; gap:10px; padding:2px 2px 15px; border-bottom:1px solid var(--line); }
@@ -933,6 +940,8 @@ mark { background: #ffe39a; padding: 1px 2px; }
 .question-box { margin-top:12px; }
 .question-box textarea { min-height:72px; }
 .selection-box small { justify-self:end; color:#87939a; font-size:8px; }
+/* 超出翻译上限:PDF 里整页拖选时,字数计数器是唯一能提前看到超限的地方。 */
+.selection-box small.over { color:#a64842; font-weight:700; }
 .excerpt-note { display:grid; gap:6px; margin-top:9px; }.excerpt-note span { color:#65747d; font-size:8px; }.excerpt-note input { height:32px; border:1px solid #d3dde1; border-radius:5px; padding:0 9px; background:#fff; font-size:9px; }.excerpt-actions { display:flex; align-items:center; gap:6px; margin-top:7px; }.excerpt-actions button { height:29px; display:inline-flex; align-items:center; gap:4px; border:1px solid #ccd8dc; border-radius:5px; padding:0 8px; color:#51636d; background:#fff; font-size:8px; cursor:pointer; }.excerpt-actions button:hover { color:var(--accent-dark); border-color:#8fc8d1; background:#effafb; }.excerpt-actions button:disabled { opacity:.45; cursor:default; }.excerpt-actions svg { width:11px; }.excerpt-actions > span { margin-left:auto; color:var(--success); font-size:8px; }
 .ask-button { width:100%; margin-top:12px; }
 .reader-error { display:flex; align-items:flex-start; gap:7px; margin-top:12px; padding:9px; border:1px solid #edc8c8; border-radius:6px; color:#913d3d; background:#fff3f3; font-size:9px; line-height:1.5; }
@@ -961,6 +970,52 @@ mark { background: #ffe39a; padding: 1px 2px; }
 .library-project-card:hover .library-project-arrow { transform:translateX(3px); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 双语对照(左英文 / 右中文)──────────────────────────────────────────────
+   同一个右栏 DOM,只换栅格模板:默认是 380px 侧栏(批注 | 对照 标签),
+   宽屏模式把译文拉到 45%。所以面板不需要在侧栏内外搬来搬去。 */
+.reader-layout[data-reader-mode="compare"] { grid-template-columns:minmax(0,55fr) minmax(0,45fr); }
+/* 宽屏下 PDF 栏只剩 ~536px:工具栏放不下全文搜索框(会被 flex 压成 0 宽的边框),
+   直接隐藏,把宽度让给目录 / 页码 / OCR / 缩放。退回批注模式即可再用搜索。 */
+.reader-layout[data-reader-mode="compare"] .reader-search { display:none; }
+.reader-layout[data-reader-mode="compare"] .reader-document { border-right:0; }
+.reader-notes[data-active="false"] { display:none; }
+.reader-tabs { display:flex; gap:4px; margin:-18px -18px 0; padding:12px 18px 0; border-bottom:1px solid var(--line); background:#f8fafb; }
+.reader-tab { display:flex; align-items:center; gap:5px; padding:7px 11px; border:1px solid transparent; border-bottom:0; border-radius:6px 6px 0 0; color:var(--muted); background:transparent; font-size:10px; cursor:pointer; }
+.reader-tab > svg { width:13px; height:13px; }
+.reader-tab:hover { color:var(--accent-dark); }
+.reader-tab[aria-selected="true"] { color:#25343d; border-color:var(--line); background:#fff; font-weight:700; }
+.compare-pane { height:100%; min-height:0; display:grid; grid-template-rows:auto auto minmax(0,1fr); }
+.compare-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:14px 2px 10px; }
+.compare-title { display:flex; align-items:flex-start; gap:8px; min-width:0; }
+.compare-title > svg { flex:0 0 auto; width:17px; height:17px; margin-top:1px; color:var(--accent-dark); }
+.compare-title strong { display:block; font-size:11px; }
+.compare-title small { display:block; margin-top:3px; color:var(--muted); font-size:8px; }
+.compare-head-actions { display:flex; align-items:center; gap:6px; }
+.compare-head-actions .secondary-button { padding:6px 9px; font-size:8px; }
+.compare-head-actions .secondary-button > svg { width:12px; height:12px; }
+.compare-head-actions .secondary-button[aria-pressed="true"] { color:var(--accent-dark); border-color:var(--accent); background:#eef7f8; }
+.compare-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:9px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.compare-toolbar .primary { padding:7px 12px; font-size:9px; }
+.compare-toolbar .primary > svg { width:13px; height:13px; }
+.compare-progress { color:var(--muted); font-size:8px; }
+.compare-error-text { flex:1 1 100%; color:#a64842; font-size:8px; line-height:1.5; }
+.compare-blocks { min-height:0; overflow:auto; padding:11px 2px 20px; display:grid; gap:9px; align-content:start; }
+.compare-block { display:grid; gap:6px; padding:10px; border:1px solid var(--line); border-radius:7px; background:#fff; }
+.compare-source { margin:0; color:#7b8994; font-size:8px; line-height:1.55; }
+.compare-target { margin:0; color:#25343d; font-size:10px; line-height:1.75; white-space:pre-wrap; }
+.compare-target.pending { color:var(--muted); font-size:9px; }
+.compare-block[data-status="pending"] { opacity:.65; }
+.compare-block[data-status="error"] { border-color:#edc8c8; background:#fff8f8; }
+.compare-block-error { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#a64842; font-size:8px; }
+.compare-block-error button { padding:3px 7px; border:1px solid #edc8c8; border-radius:4px; color:#a64842; background:#fff; font-size:8px; cursor:pointer; }
+.compare-block > footer { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#98a4ab; font-size:7px; }
+.compare-block > footer button { display:flex; align-items:center; gap:4px; padding:0; border:0; color:var(--accent-dark); background:transparent; font-size:8px; cursor:pointer; }
+.compare-block > footer button > svg { width:11px; height:11px; }
+
+@media (max-width: 1120px) {
+  .compare-head-actions .secondary-button span { display:none; }
+}
 
 @media (max-width: 1120px) {
   .app-shell { grid-template-columns: 72px minmax(0, 1fr); }
@@ -1019,6 +1074,11 @@ mark { background: #ffe39a; padding: 1px 2px; }
   .reader-layout { grid-template-columns:1fr; }
   .reader-document { height:70vh; border-right:0; border-bottom:1px solid #c8d2d7; }
   .reader-ai { min-height:520px; }
+  /* 必须显式按回去:上面 `.reader-layout[data-reader-mode="compare"]` 的特异性是 0,2,0,
+     会赢过这条 0,1,0 的单列规则,导致窄屏下对照模式不堆叠、直接横向溢出。 */
+  .reader-layout[data-reader-mode="compare"] { grid-template-columns:1fr; }
+  .reader-layout[data-reader-mode="compare"] .reader-document { height:70vh; border-bottom:1px solid #c8d2d7; }
+  .compare-pane { min-height:520px; }
 }
 
 @media (max-width: 560px) {
@@ -1067,6 +1127,16 @@ mark { background: #ffe39a; padding: 1px 2px; }
 .ocr-button { white-space: nowrap; padding: 7px 10px; }
 .translation-card { border-left: 3px solid var(--accent); background: #edf8fa; padding: 10px 12px; margin: 10px 0; }
 .translation-card p { margin: 5px 0 0; white-space: pre-wrap; }
+/* 划词气泡:紧贴选区浮出,翻译/高亮/笔记/证据一步到位。 */
+.selection-bubble { position:fixed; z-index:60; width:300px; padding:7px; border:1px solid #c3d3d9; border-radius:9px; background:#fff; box-shadow:0 14px 34px rgba(16,31,39,.24); }
+.selection-bubble .bubble-actions { display:flex; align-items:center; gap:5px; }
+.selection-bubble .bubble-actions button { flex:1; height:28px; display:inline-flex; align-items:center; justify-content:center; gap:4px; border:1px solid #ccd8dc; border-radius:5px; padding:0 4px; color:#51636d; background:#fff; font-size:9px; cursor:pointer; }
+.selection-bubble .bubble-actions button:hover { color:var(--accent-dark); border-color:#8fc8d1; background:#effafb; }
+.selection-bubble .bubble-actions button:disabled { opacity:.45; cursor:default; }
+.selection-bubble .bubble-actions svg { flex:0 0 auto; width:12px; }
+.selection-bubble .bubble-translation { max-height:168px; margin-top:7px; padding:8px 9px; overflow:auto; border-radius:6px; background:#f4f9fa; }
+.selection-bubble .bubble-translation strong { color:var(--accent-dark); font-size:8px; }
+.selection-bubble .bubble-translation p { margin:4px 0 0; color:#25343d; font-size:10px; line-height:1.6; white-space:pre-wrap; }
 .excerpt-card > header { display: flex; align-items: center; justify-content: space-between; }
 .excerpt-card.kind-highlight { border-left: 3px solid #d5a82b; }
 .excerpt-card .danger { color: #a64842; }
