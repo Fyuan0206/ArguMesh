@@ -11,6 +11,7 @@ ArguMesh 的当前进度、明确**不要开工**的项、已知欠账，以及 
 - **版本**：`3.2.5`（`package.json`）
 - **已发布能力**：项目工作区、文献库（含 `literature/` 文件夹同步）、PDF 阅读器（OCR / 划词气泡 / 页内高亮 / 双语对照）、AI Paper Card、证据矩阵、研究脉络（洞见 + 研究问题）、实验工作台、LaTeX 写作、常驻 Research Agent（Pi `AgentSession`）、全局搜索、任务中心。
 - **阶段计划**：`ARGUMESH-RESEARCH-WORKBENCH-PLAN.md` 的第 0 节记录了 2026-08-26 的实施状态，其中列出的导航收敛、研究脉络、实验工作台、Research Agent、LaTeX 写作均已完成。
+- **分发**：`v3.2.5` 已发布到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)，附带 Windows NSIS 安装包 `ArguMesh_3.2.5_x64-setup.exe`（2026-09-24，用户重新提出后手动发布）。安装包**未签名**、**不带数据库和 AI 配置**，这三条事实写在 release notes 的显著位置。**README 仍无下载章节**（见下表）。后续版本的发布是手工三步：提交 → 打 tag → `gh release create` 附带新构建的安装包。
 
 ## ⛔ 已暂缓 —— 不要开工
 
@@ -18,11 +19,11 @@ ArguMesh 的当前进度、明确**不要开工**的项、已知欠账，以及 
 
 | 项 | 决定时间 | 说明 |
 | --- | --- | --- |
-| **对外发布安装包** | 2026-09-22 | 用户原话：「目前还有功能没实现，暂时不这样做，保留方案。」打包链路本身可用且已 smoke 通过，只是不发布。完整调研见 [`docs/DISTRIBUTION-RESEARCH-2026-09-20.md`](docs/DISTRIBUTION-RESEARCH-2026-09-20.md)，构建方法见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) |
-| **分发路线实施** | 2026-09-20 | 同上：方案保持有效，等人重新提出 |
-| **双语 README 的「下载 / 安装」章节** | 2026-09-22 | 安装包不对外发布，就不该在产品 README 里写下载入口。真要补时必须一并说明：**安装包里是空库，AI 配置不随包带走**，用户装完要在设置页重填 |
-| **`.github/workflows/release.yml`** | 2026-09-22 | CI 出包，随发布一起推迟 |
+| **双语 README 的「下载 / 安装」章节** | 2026-09-22 | 仍未补。真要补时必须一并说明：**安装包里是空库，AI 配置不随包带走**，用户装完要在设置页重填；**没有代码签名**，Windows SmartScreen 会拦一下；**应用无鉴权**，不要把端口暴露到不可信网络。目前这三条只写在 v3.2.5 的 release notes 里 |
+| **`.github/workflows/release.yml`** | 2026-09-22 | CI 自动出包仍未实施，v3.2.5 是本机手工构建后上传的。补齐前每次发布都要重跑 `docs/DEPLOYMENT.md` §3 的三步 |
 | **代码签名** | 2026-09-22 | Windows / Linux 未签名是参考项目 Open Science Desktop 的既有做法，不是阻塞项 |
+
+> **已解除暂缓**：~~对外发布安装包~~ 与 ~~分发路线实施~~ —— 用户于 2026-09-24 重新提出，`v3.2.5` 已带上 Windows 安装包发布。方案文档 [`docs/DISTRIBUTION-RESEARCH-2026-09-20.md`](docs/DISTRIBUTION-RESEARCH-2026-09-20.md) 与构建方法 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §3 保持不变，仍然有效。
 
 ## 已知欠账
 

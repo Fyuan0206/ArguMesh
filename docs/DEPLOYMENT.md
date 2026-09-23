@@ -77,7 +77,7 @@ wrangler deploy --config <打印出的路径>   # 用已认证的 Wrangler CLI �
 
 ## 3. 桌面安装包（Tauri 2 + Node sidecar）
 
-> ⛔ **安装包暂不对外发布**（用户 2026-09-22 决定）。打包链路可用且已 smoke 通过，只是不发布。不要主动发布，也不要在 README 里加下载章节——见 [`TODO.md`](../TODO.md)。
+> ✅ **安装包已对外发布**：`v3.2.5` 于 2026-09-24 带上 Windows 安装包发到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)（用户当日重新提出发布）。发布是**手工三步**：提交 → 打 tag → `gh release create` 附带新构建的安装包；`.github/workflows/release.yml` 仍未做。发布说明必须带上这三条事实：**安装包里是空库，AI 配置不随包带走**（装完要在设置页重填）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）。**README 仍无下载章节**。
 
 **桌面版与 Web 版的区别**：Web 版是单端口 Node 服务 + Vite 产物；桌面版是 **Tauri 2 薄壳 + Node sidecar**——壳只做三件事（复制空库、拉起 sidecar、把窗口指过去），不重复实现任何业务逻辑，真正的前端和 API 全在 `server.mjs` 里。
 

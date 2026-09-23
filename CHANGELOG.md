@@ -8,6 +8,22 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 
 ---
 
+## Release (2026-09-24) — v3.2.5 on GitHub Releases
+
+- **First GitHub Release**: [`v3.2.5`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) carries everything since v3.2.4, with a Windows NSIS installer (`ArguMesh_3.2.5_x64-setup.exe`, ~29.8 MB, `currentUser` install — no administrator rights) attached as a downloadable asset. The user re-raised distribution on 2026-09-24; the deferred-installer note in `TODO.md` is lifted for publishing, while code signing, `release.yml` CI, and a README download section remain unimplemented.
+- **Three facts the release notes state up front** (any future download section must repeat them): the installer ships an **empty database** — projects, papers, evidence and AI settings are not in it, so re-enter your provider on the Settings page after installing; the build is **unsigned**, so SmartScreen warns about an unknown publisher; the app has **no authentication**, so never expose its port to an untrusted network.
+- **Release process is manual and documented**: commit → tag → `gh release create` with a freshly built installer. The three-step build (`build` → `build:sidecar -- --node-exe` → `tauri build`) is in `docs/DEPLOYMENT.md` §3; the v3.2.5 artifact was verified by booting the sidecar directly and exercising the `PORT=0` / `ARGUMESH_PORT=` handshake, `/api/health`, the SPA and a static asset.
+
+<details><summary>中文</summary>
+
+- **第一个 GitHub Release**：[`v3.2.5`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) 涵盖 v3.2.4 之后的全部变更，并附带 Windows NSIS 安装包 `ArguMesh_3.2.5_x64-setup.exe`（约 29.8 MB，`currentUser` 安装，不需要管理员权限）作为可下载资产。用户于 2026-09-24 重新提出发布；`TODO.md` 中「安装包暂不发布」的暂缓就此解除，但**代码签名、`release.yml` CI、README 下载章节仍未做**。
+- **发布说明开头写明的三条事实**（日后再加下载章节必须一并重复）：安装包里是**空库**——项目、文献、证据、AI 配置都不在里面，装完请到设置页重新填写提供方；构建**未签名**，SmartScreen 会提示发布者未知；应用**无鉴权**，不要把端口暴露到不可信网络。
+- **发布流程是手工的，且有文档**：提交 → 打 tag → `gh release create` 附带新构建的安装包。三步构建见 `docs/DEPLOYMENT.md` §3；v3.2.5 的产物在发布前验证过——直接启动 sidecar，走通 `PORT=0` / `ARGUMESH_PORT=` 握手、`/api/health`、SPA 首页与静态资源。
+
+</details>
+
+---
+
 ## Fixes (2026-09-23) — Correctness & dead-code sweep
 
 - **Experiment results no longer 500 after a delete**: `runNo` was allocated as `count + 1`, which collides with the `(experiment_id, run_no)` unique index once a middle result is deleted. It now takes `max(runNo) + 1`, matching `routes/ideas.ts`'s `nextVersionNo`. Covered by a new regression test (add → delete → add).
