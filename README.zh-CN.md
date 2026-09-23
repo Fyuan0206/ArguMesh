@@ -6,6 +6,8 @@
 
 > 把证据连成研究脉络。
 
+**GitHub：[github.com/Fyuan0206/ArguMesh](https://github.com/Fyuan0206/ArguMesh)** · MIT License
+
 ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究工作台,面向科研人员、研究生和论文作者。它把研究闭环收进同一条可追溯链路:
 
 ```text
@@ -21,6 +23,16 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 - **可让 AI 代为部署**:把 [让 AI 部署](#让-ai-部署) 中的提示词发给 Cursor / Claude Code / Codex / Copilot 等编程助手即可
 - **单用户**:无需登录、无需账号;一台机器上即可运行的本地优先工作台
 - **AI 可选**:接入任意 OpenAI 兼容 API(OpenAI / DeepSeek / StepFun / 本地模型等),不配置也能使用全部人工流程
+
+## 项目致谢
+
+感谢 [阶跃星辰（StepFun）](https://www.stepfun.com/) 在 ArguMesh 开发与评测期间提供模型 API 支持。
+
+<p align="center">
+  <a href="https://www.stepfun.com/">
+    <img src="./docs/stepfun-logo.png" alt="阶跃星辰 StepFun" height="48" />
+  </a>
+</p>
 
 ## 功能特性
 
@@ -198,68 +210,9 @@ AI_PROVIDERS=[{"id":"stepfun","label":"StepFun","baseUrl":"https://api.stepfun.c
 
 ## 更新记录
 
-### 文档（2026-09）— 参考项目增补
-- 参考索引新增 **[Open Science Desktop](https://github.com/ai4s-research/open-science)**、**[小绿鲸](https://www.xljsci.com/)**、**[Agentero](https://github.com/poco-ai/agentero)**（`docs/reference-projects.md` 与 README 表格同步）。
-- **阅读器:选区气泡 + 原文高亮**（借鉴小绿鲸）：选中 PDF 文字即在该处浮出气泡，内联划词翻译（同句命中缓存）、高亮 / 笔记 / 证据以彩色标记绘在原文上。标记按 PDF 页面单位存储，缩放、翻页、刷新后仍锚定原处；点击标记可回到侧栏批注。
-- **阅读器:双语对照（左英文 / 右中文）**：右栏「对照」标签把当前页切成约 400 字符一段（无损且确定性切分），点**翻译本页**后才按每批 3 段翻译，带进度与取消；**宽屏对照**隐藏侧栏，按 55/45 分栏顺读。译文按 论文 + 页码 + 目标语言 存入本机 IndexedDB，并逐段比对原文校验——换过 PDF 不会顶出旧译文。
-- **文献库批量删除**：列表多选勾选 + 确认后永久删除所选文献。
+版本历史已迁移到 **[`CHANGELOG.md`](CHANGELOG.md)**（英文条目在前，中文以 `<details><summary>中文</summary>` 折叠块给出）。其中包含 2026-09 文档期的阅读器 / 文献库更新、v3.2.5 Research Agent 网页搜索、v3.2.4 Evidence → Idea 闭环加固、v3.2.3 / v3.2.2 Pi 作为 Research Agent 底座、v3.2.1 文献文件夹同步、v3.2.0 研究工作台收敛、v0.3.0 研究弧、v0.2.0 AI-first 形态重塑，以及 v0.1.0 基础研究工作台。
 
-### v3.2.5（2026-08）— Research Agent 网页搜索
-- **`web_search` 工具**：Research Agent 可查询自托管 [SearXNG](https://docs.searxng.org/)（`SEARXNG_BASE_URL`，可选 `SEARXNG_TIMEOUT_MS`）。结果为只读外部命中（不算项目内证据）。`/api/health` 返回 `webSearch: searxng|off`。
-- **断开提示更清晰**：`network error` / 代理断开映射为中文说明；失败回合会清理卡住的 `pending` 助手消息。
-
-### v3.2.4（2026-08）— Evidence → Idea 闭环加固
-- **Research Agent Markdown**：助手回复按 GFM 渲染（标题、列表、表格、代码），不再整段纯文本。
-- **Research Agent 报错**：失败回合展示真实原因（AI / 网络 / 流中断）；中断的 SSE 不再留下永久 `pending` 助手消息；Vite `/api` 代理会刷新 SSE 头。
-- **阅读器 → 研究脉络**：保存笔记/证据摘录会写入服务端 knowledge（失败可重试同步），洞见会出现在研究脉络，并对 Research Agent 可见。
-- **研究脉络可写**：支持「新建洞见」，在项目库中创建发现 / 缺口 / 构想草稿（不再只写本地）。
-- **恢复 Pi 引用**：SSE 回合根据已完成的白名单工具动作生成可跳转 citations（不再恒为 `[]`）。
-- **项目致谢**：README 感谢 [阶跃星辰 / StepFun](https://www.stepfun.com/) 提供模型 API 支持（`docs/stepfun-logo.png`）。
-
-### v3.2.3（2026-08）— Pi 作为 Research Agent 底座
-- Research Agent **始终**运行在 Pi `AgentSession`（SSE）上；无引擎切换 / 双路径。
-- 完整领域白名单作为 Pi 工具：上下文 + 洞见 / RQ / 实验 / 消融 / 结果分析 / 论文 Diff / BibTeX / LaTeX 编译。
-- 编程工具保持关闭；写入仍为草稿。设置页 AI 配置为唯一凭证桥接。
-- 会话 mode 存为 `research_agent`（创建时仍接受旧别名 `pi_research` / `research_orchestrator`）。
-
-### v3.2.2（2026-08）— Pi 多步 Research Agent（SDK 嵌入）
-- 嵌入 `@earendil-works/pi-coding-agent` 做多步工具循环（v3.2.3 起成为唯一路径）。
-- 复用设置页 OpenAI 兼容配置；关闭编程工具；写入仅草稿。
-
-### v3.2.1（2026-08）— 文献文件夹同步
-- **`literature/` 收件箱**:绑定项目工作区后,将 PDF 放入 `{workspacePath}/literature/`,在文献库点击 **「同步 literature/」** 即可导入数据库(哈希去重,每次 ≤ 50 篇,单文件 ≤ 25 MB)。API:`POST /api/projects/:projectId/library/scan-inbox`。
-- **证据矩阵(文献较多)**:15 篇以上时使用固定列宽 + 横向滚动 + 左侧维度列固定;下方核验区不随矩阵横向撑宽;**AI 提取**会回退读取数据库中的 PDF(如 `literature/` 同步后),按每批 3 篇提交,容忍 AI 返回 null/超长字段,单篇失败不中断整批。
-
-### v3.2.0（2026-08）— 研究工作台收敛
-发布基线（`package.json` 现为 `3.2.3`，本小节为工作台收敛）。
-
-- 顶层导航收敛为：**AI 研究助手 → 文献 → 证据矩阵 → 研究脉络 → 实验 → 论文写作**。
-- **研究脉络**：洞见池（发现 / 矛盾 / 缺口 / 构想）+ 研究问题；旧 Knowledge / Gaps / Ideas / Questions 路由保留重定向以兼容书签。
-- **实验工作台**：AI 主实验 / 消融设计、CSV / JSON / 粘贴导入、带证据引用的结果分析（不执行实验本身）；分析可将结论草稿回挂到对应 RQ。
-- **论文写作**：绑定本地 `workspacePath`、编辑 `main.tex` / `references.bib`、快照、AI Diff 审阅、可选 Tectonic / latexmk 编译与 PDF 预览。
-- **持久 Research Agent**：以 Pi `AgentSession` 为底座的多步领域工具循环、有界项目上下文、白名单草稿动作与可跳转引用（`@earendil-works/pi-coding-agent`；编程工具关闭）。
-- **单用户本地版**：移除账户 / 鉴权 / `APP_ACCESS_TOKEN`（`accounts` 与 `owner_id` 经 `scripts/migrate-custom.ts` 删除）；AI 配置改为设置页单行全局配置。
-- 原生文件夹选择器，用于登记 `workspacePath`。
-
-### v0.3.0（2026-08-23）— 研究弧
-- **Research Core**：以 `research_questions` 为脊柱 + `rq_papers` 多对多关联。
-- **知识 → 缺口 → Idea → 实验**主链；每个对象都是一等公民，带状态机与溯源（`source` / `model` / `generatedAt`）。
-- **证据分层（Evidence Layer）**：单条原文经 `raw → interpretation → implication` 逐层提炼，由用户显式触发晋升。
-- 迁移 `0007_last_deathbird` 新增研究弧表；执行 `pnpm run db:migrate`（或全新 `db:seed`）应用。
-
-### v0.2.0 — AI-first 形态重塑
-- 抽出 `server/ai/` capability layer（`completeJson` / `completeText` + 集中 prompts）；route 瘦身；AI 输出统一 Zod 校验 + provenance。
-- 三入口 AI 工作台：Sidebar「AI 助手」、ProjectHome AI Hero、Research Agent launcher。
-- 账号级 AI 配置（设置页 Base URL / API Key / 模型；在 v3.2.0 收敛为单行全局配置），优于环境变量兜底。
-- 阅读器划选 AI（概括、翻译、问答），只提交选中原文 + 页码 + 问题。
-- 侧栏 Workflow 化：概览 / 文献 / 矩阵 / Ideas +「更多」。
-
-### v0.1.0 — 基础研究工作台
-- React 19 + Vite 6 前端，Hono 4（`@hono/node-server`）后端，本地 SQLite（libSQL `file:`）+ Drizzle。
-- 多用户账户体系（PBKDF2-SHA256 + HMAC 会话）——已在 v3.2.0 移除。
-- 项目 → 文献（DOI / arXiv / URL 导入、批量 PDF ≤ 25 MB、阅读状态）→ 证据矩阵（论文 × 维度，AI 提取 + 人工核验锁定）。
-- PDF 阅读器（pdf.js + OCR）、划选笔记、Paper Card、全局搜索、任务中心。
-- 迁移 `0000`–`0006`：projects / papers / paper_files / project_papers / matrices / matrix_papers / dimensions / evidence_cells / extraction_jobs / accounts / ai_settings。
+> 新增用户可见功能时，请在同一个任务内向 `CHANGELOG.md` 追加条目——见 [`AGENTS.md`](AGENTS.md#文档规则强制)。
 
 ## 数据与备份
 
@@ -297,8 +250,28 @@ scripts/           # seed、migrate、migrate-custom、backup
 drizzle/           # SQL 迁移(0000–0007;单用户化由 migrate-custom 处理)
 tests/unit/        # 前端单元测试(happy-dom)
 tests/api/         # API 测试(app.request + 临时 SQLite)
-docs/              # 品牌规范 + README 截图
+docs/              # 文档(见下方索引)
+website/           # 公开静态官网(独立 Cloudflare Worker)
+src-tauri/         # 可选的 Tauri 桌面壳 + Node sidecar
 ```
+
+### 文档索引
+
+| 文件 | 内容 |
+| --- | --- |
+| [`AGENTS.md`](AGENTS.md) | 面向所有编码 agent 的协作与开发规范 |
+| [`CLAUDE.md`](CLAUDE.md) | Claude Code 指引:命令、架构、不变量 |
+| [`PROJECT-SPEC`](docs/PROJECT-SPEC.md) | 项目定位、功能范围、明确不做什么 |
+| [`ARCHITECTURE`](docs/ARCHITECTURE.md) | 代码组织、29 张表、路由与服务、数据组织 |
+| [`PAGE-STRUCTURE`](docs/PAGE-STRUCTURE.md) | 路由、旧链接兼容、各页面行为 |
+| [`COMPONENT-GUIDELINES`](docs/COMPONENT-GUIDELINES.md) | 共享组件、CSS token、无障碍 |
+| [`DEVELOPMENT`](docs/DEVELOPMENT.md) | 命令、环境变量、双轨迁移、测试布局 |
+| [`DEPLOYMENT`](docs/DEPLOYMENT.md) | 本地 / 公开官网 / 桌面安装包 |
+| [`DESIGN`](DESIGN.md) | 视觉方向、设计令牌、QA 记录 |
+| [`CHANGELOG`](CHANGELOG.md) | 版本历史(英文 + 中文) |
+| [`TODO`](TODO.md) | 当前进度、已暂缓项、已知欠账 |
+
+`docs/` 下另有:[`brand-guidelines.md`](docs/brand-guidelines.md)、[`reference-projects.md`](docs/reference-projects.md)，以及[分发调研决策记录](docs/DISTRIBUTION-RESEARCH-2026-09-20.md)(已暂缓)。
 
 ## 测试
 
@@ -335,16 +308,6 @@ API 测试直连 Hono 应用并为每个测试文件创建独立的临时 SQLite
 | [Agentero](https://github.com/poco-ai/agentero) | Agent 原生本地文献工作台（Vault + ACP BYOA + Zotero / PDF / 双链） |
 
 ArguMesh 侧重**本地 SQLite + 证据优先的结构化对象**；上述多偏 agent / skill / 阅读产品 / 自动实验，可互为补充而非替代。
-
-## 项目致谢
-
-感谢 [阶跃星辰（StepFun）](https://www.stepfun.com/) 在 ArguMesh 开发与评测期间提供模型 API 支持。
-
-<p align="center">
-  <a href="https://www.stepfun.com/">
-    <img src="./docs/stepfun-logo.png" alt="阶跃星辰 StepFun" height="48" />
-  </a>
-</p>
 
 ## License
 

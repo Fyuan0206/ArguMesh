@@ -6,6 +6,8 @@
 
 > Weave evidence into the thread of your research.
 
+**GitHub: [github.com/Fyuan0206/ArguMesh](https://github.com/Fyuan0206/ArguMesh)** · MIT License
+
 ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research workbench** for researchers, graduate students, and paper authors. It puts the research loop into one traceable workflow:
 
 ```text
@@ -23,6 +25,16 @@ Stop shuffling information between PDF readers, spreadsheets, note apps, and cha
 - **AI is optional** — plug in any OpenAI-compatible endpoint; every manual workflow works without it
 
 > Note: the interface is currently in Chinese. 中文文档见 [README.zh-CN.md](./README.zh-CN.md)。
+
+## Acknowledgments
+
+Thanks to [StepFun (阶跃星辰)](https://www.stepfun.com/) for supporting ArguMesh with model API access during development and evaluation.
+
+<p align="center">
+  <a href="https://www.stepfun.com/">
+    <img src="./docs/stepfun-logo.png" alt="StepFun" height="48" />
+  </a>
+</p>
 
 ## Features
 
@@ -184,67 +196,9 @@ Optional: install [Tectonic](https://tectonic-typesetting.github.io/) or `latexm
 
 ## Changelog
 
-### Docs (2026-09) — Reference projects
-- Expanded the reference index with **[Open Science Desktop](https://github.com/ai4s-research/open-science)**, **[小绿鲸](https://www.xljsci.com/)**, and **[Agentero](https://github.com/poco-ai/agentero)** (`docs/reference-projects.md` + README tables).
-- **Reader: selection bubble + on-page highlights** (borrowed from 小绿鲸): selecting PDF text opens a floating bubble at the selection — inline 划词翻译 (cached per sentence), 高亮 / 笔记 / 证据 saved as coloured marks painted onto the page. Marks are stored in PDF page units so they survive zoom, page turns, and reload; click a mark to reopen its note.
-- **Reader: 双语对照 (bilingual side-by-side)**: the sidebar's 对照 tab splits the current page into ~400-character passages (lossless, deterministic) and translates them on an explicit 翻译本页 click — 3 at a time, with progress and cancel. 宽屏对照 hides the sidebar for a 55/45 PDF/translation split. Results are cached per paper + page + language in IndexedDB and re-validated against the stored source text, so a replaced PDF never shows a stale translation.
-- **Library batch delete**: multi-select checkboxes on the literature list + confirm to permanently delete selected papers.
+Version history now lives in **[`CHANGELOG.md`](CHANGELOG.md)** (English entries with Chinese translations). It covers the Docs (2026-09) reader/library updates, v3.2.5 Research Agent web search, v3.2.4 Evidence → Idea loop hardening, v3.2.3 / v3.2.2 Pi as the Research Agent foundation, v3.2.1 literature folder sync, v3.2.0 research workbench convergence, v0.3.0 research arc, v0.2.0 AI-first reshape, and v0.1.0 foundation.
 
-### v3.2.5 (2026-08) — Research Agent web search
-- **`web_search` tool**: Research Agent can query a self-hosted [SearXNG](https://docs.searxng.org/) instance (`SEARXNG_BASE_URL`, optional `SEARXNG_TIMEOUT_MS`). Results are read-only external hits (not project evidence). `/api/health` reports `webSearch: searxng|off`.
-- **Clearer turn disconnects**: opaque `network error` / proxy drops map to a Chinese hint; failed turns force-heal stuck `pending` assistants.
-
-### v3.2.4 (2026-08) — Evidence → Idea loop hardening
-- **Research Agent markdown**: assistant replies render GFM (headings, lists, tables, code) instead of raw plain text.
-- **Research Agent errors**: failed turns show the real cause (AI / network / stream interrupt); interrupted SSE no longer leaves forever-`pending` assistants; Vite `/api` proxy flushes SSE headers.
-- **Reader → Research Thread**: saving a note/evidence excerpt now persists to server knowledge (with sync retry), so insights appear on the Research Thread and are visible to the Research Agent.
-- **Research Thread write surface**: “New insight” creates finding / gap / concept drafts in the project DB (not local-only).
-- **Pi citations restored**: SSE turns store jumpable citations derived from completed whitelist tool actions (no longer always `[]`).
-- **Acknowledgments**: README thanks [StepFun](https://www.stepfun.com/) for model API support (`docs/stepfun-logo.png`).
-
-### v3.2.3 (2026-08) — Pi as Research Agent foundation
-- Research Agent **always** runs on Pi `AgentSession` (SSE). No engine picker / dual path.
-- Full domain whitelist as Pi tools: context + insight / RQ / experiment / ablation / result analysis / paper Diff / BibTeX / LaTeX compile.
-- Coding tools remain off; writes stay drafts. Settings-page AI config is the only credential bridge.
-- Conversation mode stored as `research_agent` (legacy `pi_research` / `research_orchestrator` aliases accepted on create).
-
-### v3.2.2 (2026-08) — Pi multi-step Research Agent (SDK embed)
-- Embedded `@earendil-works/pi-coding-agent` for multi-step tool loops (superseded as sole path in v3.2.3).
-- Reuses Settings-page OpenAI-compatible config; coding tools off; draft-only writes.
-### v3.2.1 (2026-08) — Literature folder sync
-- **`literature/` inbox**: bind a project workspace, drop PDFs into `{workspacePath}/literature/`, click **Sync `literature/`** on the library page to import into the database (hash dedup, ≤ 50 files / sync, ≤ 25 MB each). API: `POST /api/projects/:projectId/library/scan-inbox`.
-- **Evidence Matrix (many papers)**: fixed column widths + horizontal scroll and sticky dimension column when a matrix has 15+ columns; verification pane stays viewport-width; **AI extract** falls back to server-stored PDFs (e.g. after `literature/` sync), batches 3 papers per request, tolerates null/overlong AI fields, and skips failed papers instead of aborting the whole run.
-
-### v3.2.0 (2026-08) — Research workbench convergence
-Current release (`package.json` `3.2.0`).
-
-- Navigation converged to: **AI Research Assistant → Literature → Evidence Matrix → Research Thread → Experiments → Writing**.
-- **Research Thread**: insights pool (finding / contradiction / gap / concept) + research questions; legacy Knowledge / Gaps / Ideas / Questions routes redirect for bookmark compatibility.
-- **Experiments**: AI main/ablation design, CSV / JSON / paste import, evidence-cited analysis (does not execute experiments); analysis can append a conclusion draft onto the linked RQ.
-- **Writing**: bind a local `workspacePath`, edit `main.tex` / `references.bib`, snapshots, AI Diff review, optional Tectonic / latexmk compile + PDF preview.
-- **Persistent Research Agent**: Pi `AgentSession` substrate, multi-turn domain tool loops, bounded project context, whitelist draft actions with jumpable citations (`@earendil-works/pi-coding-agent`; coding tools off).
-- **Single-user local edition**: removed accounts / auth / `APP_ACCESS_TOKEN` (`accounts` and `owner_id` dropped via `scripts/migrate-custom.ts`); global AI config is a single Settings row.
-- Native folder picker for registering `workspacePath`.
-
-### v0.3.0 (2026-08-23) — Research arc
-- **Research Core**: `research_questions` as the spine + `rq_papers` many-to-many linking.
-- **Knowledge → Gap → Idea → Experiment** chain; each object is first-class with a state machine and provenance (`source` / `model` / `generatedAt`).
-- **Evidence Layers**: refine a quote through `raw → interpretation → implication`, with explicit user-triggered promotion.
-- Migration `0007_last_deathbird` adds the research-arc tables. Apply with `pnpm run db:migrate` (or a fresh `db:seed`).
-
-### v0.2.0 — AI-first reshape
-- Extracted `server/ai/` capability layer (`completeJson` / `completeText` + centralized prompts); routes slimmed; AI output uses Zod validation + provenance.
-- Three AI entry points: Sidebar assistant trigger, ProjectHome AI Hero, Research Agent launcher.
-- Per-account AI config in Settings (later collapsed to a single global row in v3.2.0), overriding env fallback.
-- Reader AI (summarize / translate / ask) — selection + page + question only.
-- Workflow-style sidebar: Overview / Library / Matrix / Ideas + More.
-
-### v0.1.0 — Foundation research workbench
-- React 19 + Vite 6 frontend, Hono 4 (`@hono/node-server`) backend, local SQLite (libSQL `file:`) + Drizzle.
-- Multi-user accounts (PBKDF2-SHA256 + HMAC sessions) — later removed in v3.2.0.
-- Project → Literature (DOI / arXiv / URL import, batch PDF ≤ 25 MB, reading status) → Evidence Matrix (papers × dimensions, AI extraction + human verification with locking).
-- PDF reader (pdf.js + OCR), selection notes, Paper Card, global search, task center.
-- Migrations `0000`–`0006`: projects / papers / paper_files / project_papers / matrices / matrix_papers / dimensions / evidence_cells / extraction_jobs / accounts / ai_settings.
+> Adding a user-facing feature? Append to `CHANGELOG.md` in the same task — see [`AGENTS.md`](AGENTS.md#文档规则强制).
 
 ## Data & backup
 
@@ -282,8 +236,28 @@ scripts/           # seed, migrate, migrate-custom, backup
 drizzle/           # SQL migrations (0000–0007; single-user port via migrate-custom)
 tests/unit/        # frontend unit tests (happy-dom)
 tests/api/         # API tests (app.request + temporary SQLite)
-docs/              # brand guidelines + README screenshots
+docs/              # documentation — see the map below
+website/           # static public marketing site (separate Cloudflare Worker)
+src-tauri/         # optional Tauri desktop shell + Node sidecar
 ```
+
+### Documentation map
+
+| File | What's in it |
+| --- | --- |
+| [`AGENTS.md`](AGENTS.md) | Collaboration + coding rules for every agent (the cross-tool contract) |
+| [`CLAUDE.md`](CLAUDE.md) | Claude Code guidance: commands, architecture, invariants |
+| [`PROJECT-SPEC`](docs/PROJECT-SPEC.md) | Positioning, scope, what ArguMesh deliberately does *not* do |
+| [`ARCHITECTURE`](docs/ARCHITECTURE.md) | Code layout, 29 tables, routes/services, data organization |
+| [`PAGE-STRUCTURE`](docs/PAGE-STRUCTURE.md) | Routes, legacy-link compatibility, per-page behavior |
+| [`COMPONENT-GUIDELINES`](docs/COMPONENT-GUIDELINES.md) | Shared primitives, CSS tokens, accessibility |
+| [`DEVELOPMENT`](docs/DEVELOPMENT.md) | Commands, env vars, two-track migrations, test layout |
+| [`DEPLOYMENT`](docs/DEPLOYMENT.md) | Local / public website / desktop installer |
+| [`DESIGN`](DESIGN.md) | Visual direction, design tokens, QA history |
+| [`CHANGELOG`](CHANGELOG.md) | Version history (English + Chinese) |
+| [`TODO`](TODO.md) | Current progress, deferred items, known debts |
+
+Also in `docs/`: [`brand-guidelines.md`](docs/brand-guidelines.md), [`reference-projects.md`](docs/reference-projects.md), and the [`distribution research`](docs/DISTRIBUTION-RESEARCH-2026-09-20.md) decision record (deferred).
 
 ## Tests
 
@@ -320,16 +294,6 @@ Projects and products we consulted while shaping the roadmap (summaries + links 
 | [Agentero](https://github.com/poco-ai/agentero) | Agent-native local literature workbench (Vault + ACP BYOA + Zotero / PDF / wikilinks) |
 
 ArguMesh focuses on a **local SQLite, evidence-first object model**; these lean more agent / skill / reading-product / auto-experiment — complementary, not replacements.
-
-## Acknowledgments
-
-Thanks to [StepFun (阶跃星辰)](https://www.stepfun.com/) for supporting ArguMesh with model API access during development and evaluation.
-
-<p align="center">
-  <a href="https://www.stepfun.com/">
-    <img src="./docs/stepfun-logo.png" alt="StepFun" height="48" />
-  </a>
-</p>
 
 ## License
 
