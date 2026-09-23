@@ -128,4 +128,30 @@ describe("experiment design and real-result analysis", () => {
     expect(await response.json()).toMatchObject({ error: "AI_ANALYSIS_INVALID_REFERENCES" });
     invalidReferences = false;
   });
+
+  it("reuses no occupied runNo after a result is deleted", async () => {
+    // 回归:`runNo` 曾用 `existing.length + 1` 分配,删掉中间一条再新增会撞
+    // `experiment_results (experiment_id, run_no)` 唯一索引,直接 500。
+    const created: string[] = [];
+    for (const metrics of [{ ap: 0.70 }, { ap: 0.80 }]) {
+      const response = await app.request(`/api/projects/${projectId}/experiments/${experimentId}/results`, {
+        method: "POST", headers: jsonHeaders(), body: JSON.stringify({ metrics, notes: "" }),
+      }, context.bindings);
+      expect(response.status).toBe(201);
+      created.push(((await response.json()) as { result: { id: string } }).result.id);
+    }
+    const deleted = await app.request(`/api/projects/${projectId}/experiments/${experimentId}/results/${created[0]}`, { method: "DELETE" }, context.bindings);
+    expect(deleted.status).toBe(200);
+
+    const added = await app.request(`/api/projects/${projectId}/experiments/${experimentId}/results`, {
+      method: "POST", headers: jsonHeaders(), body: JSON.stringify({ metrics: { ap: 0.90 }, notes: "" }),
+    }, context.bindings);
+    expect(added.status).toBe(201);
+    const payload = await added.json() as { result: { runNo: number } };
+    expect(payload.result.runNo).toBe(4);
+
+    const listed = await app.request(`/api/projects/${projectId}/experiments/${experimentId}`, {}, context.bindings);
+    const after = await listed.json() as { experiment: { results: Array<{ id: string; runNo: number }> } };
+    expect(after.experiment.results.map((result) => result.runNo).sort((a, b) => a - b)).toEqual([1, 3, 4]);
+  });
 });

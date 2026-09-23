@@ -101,8 +101,6 @@ const patchSchema = z.object({
   rationale: z.string().max(4_000).optional(),
   note: z.string().max(1_000).optional(),
   status: z.enum(GAP_STATUSES).optional(),
-  // 转换目标:仅 status→converted 时记录(Idea 一等对象在 P3 落地;本字段先占位留接口)。
-  convertedIdeaId: z.string().max(160).optional(),
 });
 
 // prompt/schema 单一真源在 server/ai/{prompts,capabilities}.ts(GAP_DISCOVERY_SYSTEM_PROMPT / discoverOutputSchema)。
@@ -196,14 +194,9 @@ gapRoutes.patch("/projects/:projectId/gaps/:gapId", async (c) => {
     return c.json({ error: "INVALID_GAP_TRANSITION", message: `不允许从 ${existing.status} 转到 ${parsed.data.status}` }, 400);
   }
 
-  const { convertedIdeaId, ...rest } = parsed.data;
   const now = new Date().toISOString();
-  // 转 Idea 时把目标 idea id 记进 note(占位,P3 真正落地 ideas 表前先留痕)。
-  const noteUpdate = parsed.data.status === "converted" && convertedIdeaId
-    ? { note: `${existing.note}${existing.note ? "\n" : ""}[转 Idea] ${convertedIdeaId}`.slice(0, 1_000) }
-    : {};
-  await db.update(gaps).set({ ...rest, ...noteUpdate, updatedAt: now }).where(eq(gaps.id, gapId));
-  const updated = { ...existing, ...rest, ...noteUpdate, updatedAt: now };
+  await db.update(gaps).set({ ...parsed.data, updatedAt: now }).where(eq(gaps.id, gapId));
+  const updated = { ...existing, ...parsed.data, updatedAt: now };
   return c.json({ gap: toGap(updated as GapRow) });
 });
 

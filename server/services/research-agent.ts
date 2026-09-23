@@ -1,12 +1,11 @@
 import { and, eq } from "drizzle-orm";
-import { experimentDesignSchema, runResearchAgentTurn, type researchAgentOutputSchema } from "../ai/capabilities";
+import { experimentDesignSchema, type researchAgentOutputSchema } from "../ai/capabilities";
 import { createDatabase } from "../db/client";
 import {
   aiActions, aiConversations, experimentResults, experiments, gaps, ideas, ideaVersions,
   knowledgeItems, knowledgeRelations, researchQuestionEvidence, researchQuestions,
 } from "../db/schema";
 import type { AppBindings } from "../types";
-import { resolveAiForRequest } from "./ai";
 import { assembleProjectContext } from "./project-context";
 import { containsDangerousLatex } from "./paper-files";
 import { analysisReferencesExist, persistResultAnalysisDraft } from "./result-analysis";
@@ -21,46 +20,6 @@ export interface AgentTurnInput {
   assistantMessageId: string;
   message: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
-}
-
-/** 单回合固定为 1 次模型调用 + 最多 1 个类型化写动作。 */
-export async function executeResearchAgentTurn(env: AppBindings, input: AgentTurnInput) {
-  const context = await assembleProjectContext(env, input.projectId);
-  if (!context) throw new Error("PROJECT_NOT_FOUND");
-  const resolution = await resolveAiForRequest(env, {});
-  if ("error" in resolution) throw new AgentConfigurationError(resolution.error.code, resolution.error.message);
-  const generated = await runResearchAgentTurn(env, {
-    context, history: input.history, message: input.message,
-    providerConfig: resolution.provider, model: resolution.model,
-  });
-  const citations = sanitizeCitations(generated.data.citations, context);
-    const action = generated.data.action
-    ? await executeWhitelistedAgentAction(env, input, generated.data.action, context, generated.model, generated.generatedAt)
-    : null;
-  return { ...generated.data, citations, action, model: generated.model, generatedAt: generated.generatedAt };
-}
-
-function sanitizeCitations(citations: AgentOutput["citations"], context: NonNullable<Awaited<ReturnType<typeof assembleProjectContext>>>) {
-  const allowed = new Map<string, string>();
-  allowed.set(`project:${context.project.id}`, `/projects/${encodeURIComponent(context.project.id)}`);
-  for (const paper of context.literature) allowed.set(`paper:${paper.id}`, `/projects/${encodeURIComponent(context.project.id)}/library/${encodeURIComponent(paper.id)}`);
-  for (const matrix of context.evidenceMatrices) {
-    const href = `/projects/${encodeURIComponent(context.project.id)}/matrices/${encodeURIComponent(matrix.id)}`;
-    allowed.set(`matrix:${matrix.id}`, href);
-    for (const cell of matrix.cells) allowed.set(`evidence:${cell.id}`, href);
-  }
-  for (const item of context.researchThread.knowledge) allowed.set(`insight:${item.id}`, `/projects/${encodeURIComponent(context.project.id)}/research?view=insights`);
-  for (const item of context.researchThread.gaps) allowed.set(`insight:${item.id}`, `/projects/${encodeURIComponent(context.project.id)}/research?view=insights&type=gap`);
-  for (const item of context.researchThread.ideas) allowed.set(`insight:${item.id}`, `/projects/${encodeURIComponent(context.project.id)}/research?view=insights&type=concept`);
-  for (const item of context.researchThread.questions) allowed.set(`research_question:${item.id}`, `/projects/${encodeURIComponent(context.project.id)}/research?view=questions`);
-  for (const experiment of context.experiments) {
-    allowed.set(`experiment:${experiment.id}`, `/projects/${encodeURIComponent(context.project.id)}/experiments`);
-    for (const result of experiment.results) allowed.set(`result:${result.id}`, `/projects/${encodeURIComponent(context.project.id)}/experiments`);
-  }
-  return citations.flatMap((citation) => {
-    const href = allowed.get(`${citation.kind}:${citation.id}`);
-    return href ? [{ ...citation, href }] : [];
-  });
 }
 
 /** 白名单写动作执行器（Research Agent 与 Pi SDK 共用；始终以 draft / 提案形式落库）。 */

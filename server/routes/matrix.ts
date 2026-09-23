@@ -1,8 +1,8 @@
-import { and, asc, eq, isNull, max } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
-import { dimensions, evidenceCells, matrices, matrixPapers, papers, projectPapers, projects } from "../db/schema";
+import { dimensions, evidenceCells, matrices, matrixPapers, paperFiles, papers, projectPapers, projects } from "../db/schema";
 import type { AppEnv } from "../types";
 
 const evidenceStatusSchema = z.object({
@@ -82,20 +82,23 @@ matrixRoutes.get("/matrices/:matrixId", async (c) => {
     })))).onConflictDoNothing();
   }
 
-  const paperRows = await db.select({ id: papers.id, name: papers.shortName, title: papers.title, venue: papers.venue, year: papers.year, hasFile: papers.r2Key, sortOrder: matrixPapers.sortOrder })
+  const paperRows = await db.select({ id: papers.id, name: papers.shortName, title: papers.title, venue: papers.venue, year: papers.year, sortOrder: matrixPapers.sortOrder })
     .from(matrixPapers).innerJoin(papers, eq(matrixPapers.paperId, papers.id)).where(eq(matrixPapers.matrixId, matrixId)).orderBy(asc(matrixPapers.sortOrder));
+  // `hasFile` 以 `paper_files` 为准(每篇至多一行);`papers.r2_key` 是遗留列、不再写入。
+  const fileRows = await db.select({ paperId: paperFiles.paperId }).from(paperFiles).where(inArray(paperFiles.paperId, paperRows.map((row) => row.id)));
+  const withFiles = new Set(fileRows.map((row) => row.paperId));
   const cellRows = await db.select().from(evidenceCells).where(eq(evidenceCells.matrixId, matrixId));
-  return c.json(matrixResponse({ id: matrix.id, name: matrix.name, description: matrix.description, extractionProgress: matrix.extractionProgress }, paperRows, dimensionRows, cellRows, matrix.projectId));
+  return c.json(matrixResponse({ id: matrix.id, name: matrix.name, description: matrix.description, extractionProgress: matrix.extractionProgress }, paperRows.map((row) => ({ ...row, hasFile: withFiles.has(row.id) })), dimensionRows, cellRows, matrix.projectId));
 });
 
-function matrixResponse(project: { id: string; name: string; description: string | null; extractionProgress: number }, paperRows: Array<{ id: string; name: string; title: string; venue: string; year: number; hasFile: string | null; sortOrder: number }>, dimensionRows: Array<typeof dimensions.$inferSelect>, cellRows: Array<typeof evidenceCells.$inferSelect>, projectId = project.id) {
+function matrixResponse(project: { id: string; name: string; description: string | null; extractionProgress: number }, paperRows: Array<{ id: string; name: string; title: string; venue: string; year: number; hasFile: boolean; sortOrder: number }>, dimensionRows: Array<typeof dimensions.$inferSelect>, cellRows: Array<typeof evidenceCells.$inferSelect>, projectId = project.id) {
   const cells = Object.fromEntries(cellRows.map((cell) => [`${cell.dimensionId}:${cell.paperId}`, { id: cell.id, value: cell.value, status: cell.status, confidence: cell.confidence / 100, claim: cell.claim, sourcePage: cell.sourcePage, sourceSection: cell.sourceSection, sourceExcerpt: cell.sourceExcerpt, locked: cell.locked }]));
   const groupMap = new Map<string, { id: string; label: string; rows: Array<{ id: string; label: string }> }>();
   for (const dimension of dimensionRows) {
     const group = groupMap.get(dimension.groupKey) ?? { id: dimension.groupKey, label: dimension.groupLabel, rows: [] };
     group.rows.push({ id: dimension.id, label: dimension.label }); groupMap.set(dimension.groupKey, group);
   }
-  return { project: { id: projectId, name: project.name, description: project.description, extractionProgress: project.extractionProgress }, papers: paperRows.map(({ hasFile, sortOrder: _sortOrder, ...paper }) => ({ ...paper, hasFile: Boolean(hasFile) })), groups: [...groupMap.values()], cells };
+  return { project: { id: projectId, name: project.name, description: project.description, extractionProgress: project.extractionProgress }, papers: paperRows.map(({ sortOrder: _sortOrder, ...paper }) => paper), groups: [...groupMap.values()], cells };
 }
 
 matrixRoutes.get("/projects/:projectId/matrix", async (c) => {
@@ -114,13 +117,22 @@ matrixRoutes.get("/projects/:projectId/matrix", async (c) => {
       title: papers.title,
       venue: papers.venue,
       year: papers.year,
-      hasFile: papers.r2Key,
       sortOrder: projectPapers.sortOrder,
     })
     .from(projectPapers)
     .innerJoin(papers, eq(projectPapers.paperId, papers.id))
     .where(eq(projectPapers.projectId, projectId))
     .orderBy(asc(projectPapers.sortOrder));
+
+  // `hasFile` 以 `paper_files` 为准(每篇至多一行);`papers.r2_key` 是遗留列、不再写入。
+  const fileRows = await db.select({ paperId: paperFiles.paperId }).from(paperFiles)
+    .where(inArray(paperFiles.paperId, projectPaperRows.map((row) => row.id)));
+  const withFiles = new Set(fileRows.map((row) => row.paperId));
+
+  // 提取进度取项目下各矩阵进度的最大值,与 `GET /matrices/:matrixId` 同一口径
+  // (`projects.extraction_progress` 是只读不写的废弃列,恒为 0)。
+  const matrixProgressRows = await db.select({ extractionProgress: matrices.extractionProgress }).from(matrices).where(eq(matrices.projectId, projectId));
+  const extractionProgress = matrixProgressRows.reduce((max, row) => Math.max(max, row.extractionProgress), 0);
 
   const dimensionRows = await db
     .select()
@@ -166,11 +178,11 @@ matrixRoutes.get("/projects/:projectId/matrix", async (c) => {
       id: project.id,
       name: project.name,
       description: project.description,
-      extractionProgress: project.extractionProgress,
+      extractionProgress,
     },
-    papers: projectPaperRows.map(({ hasFile, sortOrder: _sortOrder, ...paper }) => ({
+    papers: projectPaperRows.map(({ sortOrder: _sortOrder, ...paper }) => ({
       ...paper,
-      hasFile: Boolean(hasFile),
+      hasFile: withFiles.has(paper.id),
     })),
     groups: [...groupMap.values()],
     cells,

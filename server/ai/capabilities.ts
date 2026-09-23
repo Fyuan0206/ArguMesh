@@ -3,23 +3,17 @@ import type { AiProviderConfig } from "../services/ai";
 import type { AppBindings } from "../types";
 import { completeJson, completeText } from "./complete";
 import {
-  CARD_SYSTEM_PROMPT,
   DRAFT_SYSTEM_PROMPT,
   EXTRACT_SYSTEM_PROMPT,
-  EXTRACTION_PLAN_SYSTEM_PROMPT,
   EXPERIMENT_DESIGN_SYSTEM_PROMPT,
   GAP_DISCOVERY_SYSTEM_PROMPT,
   INTELLIGENCE_SYSTEM_PROMPT,
-  MATRIX_EXTRACT_SYSTEM_PROMPT,
   REGENERATE_SYSTEM_PROMPT,
   REVIEW_SYSTEM_PROMPT,
   REVISE_SYSTEM_PROMPT,
   RESULT_ANALYSIS_SYSTEM_PROMPT,
-  RESEARCH_AGENT_SYSTEM_PROMPT,
   PAPER_PATCH_SYSTEM_PROMPT,
-  readerAskSystem,
   readerSummarySystem,
-  readerTranslateSystem,
 } from "./prompts";
 
 /**
@@ -33,23 +27,6 @@ import {
  */
 
 // ───────────────────────── Output schemas（集中） ─────────────────────────
-
-const cardField = z.string().min(1).max(500);
-export const cardOutputSchema = z.object({
-  problem: cardField,
-  method: cardField,
-  data: cardField,
-  findings: cardField,
-  limitations: cardField,
-  // 摘录按 800 字兜底:实测模型偶会输出超长原文摘录(提示词要求 ≤200 字,上限留裕量)。
-  sources: z.object({
-    problem: z.string().max(800),
-    method: z.string().max(800),
-    data: z.string().max(800),
-    findings: z.string().max(800),
-    limitations: z.string().max(800),
-  }),
-});
 
 export const extractOutputSchema = z.object({
   kind: z.enum(["note", "claim", "evidence"]),
@@ -219,39 +196,11 @@ export const paperPatchOutputSchema = z.object({
   warnings: z.array(z.string().max(1_000)).max(50).default([]),
 });
 
-// ───────────────────────── 纯文本预处理（无 DB，capability 内聚） ─────────────────────────
-
-/** 发送给 LLM 的文本上限:保留开头 + 结尾,中段省略（card.ts 原实现，逐字搬移）。 */
-const LLM_TEXT_LIMIT = 150_000;
-const LLM_TEXT_TAIL = 5_000;
-function trimTextForLlm(text: string): string {
-  if (text.length <= LLM_TEXT_LIMIT) return text;
-  const head = text.slice(0, LLM_TEXT_LIMIT - LLM_TEXT_TAIL);
-  const tail = text.slice(-LLM_TEXT_TAIL);
-  return `${head}\n\n[中段省略 ${text.length - LLM_TEXT_LIMIT} 字]\n\n${tail}`;
-}
-
 // ───────────────────────── 结构化能力（JSON + Zod + 重试） ─────────────────────────
 
 interface AiOpts {
   providerConfig: AiProviderConfig;
   model: string;
-}
-
-/** 分析论文 → Paper Card（五段 + 每段原文摘录）。 */
-export async function generatePaperCard(
-  env: AppBindings,
-  opts: AiOpts & { title: string; authors?: string; source?: string; text: string },
-) {
-  const userContent = JSON.stringify({
-    论文信息: { 标题: opts.title, 作者: opts.authors ?? "", 来源: opts.source ?? "未知" },
-    论文文本: trimTextForLlm(opts.text),
-  });
-  return completeJson(env, cardOutputSchema, {
-    system: CARD_SYSTEM_PROMPT, user: userContent,
-    providerConfig: opts.providerConfig, model: opts.model,
-    maxTokens: 4_000, retryMaxTokens: 8_000, timeoutMs: 150_000, retryTimeoutMs: 180_000,
-  });
 }
 
 /** 提炼知识 → Note/Claim/Evidence（论文摘录 quote + 页码）。 */
@@ -421,23 +370,6 @@ export async function analyzeExperimentResult(
   });
 }
 
-/** 项目上下文 + 历史消息 → 一次有界 Research Agent 回合。 */
-export async function runResearchAgentTurn(
-  env: AppBindings,
-  opts: AiOpts & { context: unknown; history: Array<{ role: "user" | "assistant"; content: string }>; message: string },
-) {
-  return completeJson(env, researchAgentOutputSchema, {
-    system: RESEARCH_AGENT_SYSTEM_PROMPT,
-    user: JSON.stringify({ projectContext: opts.context, recentConversation: opts.history.slice(-12), userMessage: opts.message }),
-    providerConfig: opts.providerConfig,
-    model: opts.model,
-    maxTokens: 4_000,
-    retryMaxTokens: 6_000,
-    timeoutMs: 120_000,
-    retryTimeoutMs: 150_000,
-  });
-}
-
 /** 论文全文 + 项目证据 → 不落盘的 LaTeX 修改提案。 */
 export async function proposePaperPatch(
   env: AppBindings,
@@ -455,63 +387,7 @@ export async function proposePaperPatch(
   });
 }
 
-/** 矩阵证据抽取（单篇论文的 pages + dimensions → JSON 数组单元格）。
- *  extraction /extract 是「逐篇循环 + 路由内 job 管理」，此能力只负责单篇抽取原语。 */
-export async function extractMatrixPaper(
-  env: AppBindings,
-  opts: AiOpts & {
-    paper: { id: string; title: string };
-    dimensions: Array<{ id: string; label: string }>;
-    pages: Array<{ page: number; text: string }>;
-  },
-) {
-  const userContent = JSON.stringify({ paper: opts.paper, dimensions: opts.dimensions, pages: opts.pages });
-  const cellSchema = z.object({
-    paperId: z.string(), dimensionId: z.string(), value: z.string().max(2_000), claim: z.string().max(4_000),
-    confidence: z.union([z.number().min(0).max(1), z.number().min(0).max(100), z.string()]).transform((value) => {
-      const number = typeof value === "string" ? Number(value) : value;
-      return number > 1 ? number / 100 : number;
-    }),
-    sourcePage: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number), z.null()]).nullable(),
-    sourceSection: z.union([z.string().max(500), z.number(), z.null()]).transform((value) => (typeof value === "number" ? String(value) : value ?? "")).default("原文"),
-    sourceExcerpt: z.union([z.string().max(2_000), z.null()]).transform((value) => value ?? "").default(""),
-  });
-  return completeJson(env, z.array(cellSchema), {
-    system: MATRIX_EXTRACT_SYSTEM_PROMPT, user: userContent,
-    providerConfig: opts.providerConfig, model: opts.model,
-    maxTokens: 4_000, retryMaxTokens: 8_000, timeoutMs: 150_000, retryTimeoutMs: 180_000,
-  });
-}
-
-/** 证据核验规划（候选证据 → Markdown 计划，自由文本）。 */
-export async function planExtraction(
-  env: AppBindings,
-  opts: AiOpts & { project: { id: string; name: string }; candidates: unknown },
-) {
-  const { text, model, generatedAt } = await completeText(env, {
-    system: EXTRACTION_PLAN_SYSTEM_PROMPT,
-    user: JSON.stringify({ project: opts.project, candidates: opts.candidates }),
-    providerConfig: opts.providerConfig, model: opts.model,
-    maxTokens: 1_200, timeoutMs: 55_000,
-  });
-  return { plan: text, model, generatedAt };
-}
-
 // ───────────────────────── 自由文本能力（Reader，无 Zod） ─────────────────────────
-
-/** Reader 翻译。 */
-export async function readerTranslate(
-  env: AppBindings,
-  opts: AiOpts & { text: string; targetLanguage: "中文" | "English"; paperTitle: string; page: number },
-) {
-  const { text, model, generatedAt } = await completeText(env, {
-    system: readerTranslateSystem(opts.targetLanguage),
-    user: JSON.stringify(opts),
-    providerConfig: opts.providerConfig, model: opts.model,
-    maxTokens: 2_000, timeoutMs: 45_000,
-  });
-  return { translation: text, model, generatedAt };
-}
 
 /** Reader 概括（selection → 一句话；fullText → 3-5 句）。 */
 export async function readerSummarize(
@@ -532,26 +408,4 @@ export async function readerSummarize(
     maxTokens: 500, timeoutMs: 45_000,
   });
   return { summary: text, model, generatedAt };
-}
-
-/** Reader 提问（基于选区或全文作答）。 */
-export async function readerAsk(
-  env: AppBindings,
-  opts: AiOpts & {
-    paper: { id: string; title: string; authors: string; year: number };
-    page: number; selection: string; fullText?: string; question: string;
-  },
-) {
-  const hasSelection = Boolean(opts.selection);
-  const { text, model, generatedAt } = await completeText(env, {
-    system: readerAskSystem(hasSelection),
-    user: JSON.stringify({
-      source: { paperId: opts.paper.id, title: opts.paper.title, authors: opts.paper.authors, year: opts.paper.year, page: opts.page },
-      ...(hasSelection ? { selectedText: opts.selection } : { fullText: opts.fullText ?? "" }),
-      question: opts.question,
-    }),
-    providerConfig: opts.providerConfig, model: opts.model,
-    maxTokens: 900, timeoutMs: 45_000,
-  });
-  return { answer: text, model, generatedAt };
 }

@@ -28,6 +28,18 @@ interface ResultRow {
   model: string | null; generatedAt: string | null; createdAt: string;
 }
 
+/**
+ * 分配下一个 runNo。必须取 max 而不是 count:
+ * `experiment_results` 上有 `(experiment_id, run_no)` 唯一索引,而结果可被单独删除,
+ * 用 count 会在「删掉中间一条再新增」时复用一个已占用的 runNo,insert 直接撞唯一索引报 500。
+ * 与 `routes/ideas.ts` 的 `nextVersionNo` 同一模式。
+ */
+async function nextRunNo(db: ReturnType<typeof createDatabase>, experimentId: string): Promise<number> {
+  const rows = await db.select({ runNo: experimentResults.runNo }).from(experimentResults)
+    .where(eq(experimentResults.experimentId, experimentId)).orderBy(desc(experimentResults.runNo)).limit(1);
+  return (rows[0]?.runNo ?? 0) + 1;
+}
+
 const EXP_SELECT = {
   id: experiments.id, projectId: experiments.projectId, ideaId: experiments.ideaId, rqId: experiments.rqId,
   title: experiments.title, hypothesis: experiments.hypothesis, configJson: experiments.configJson,
@@ -288,10 +300,10 @@ experimentRoutes.post("/projects/:projectId/experiments/:experimentId/results", 
   const parsed = z.object({ metrics: rowSchema.default({}), figures: z.array(z.unknown()).max(100).default([]), notes: z.string().max(8_000).default("") }).safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "INVALID_RESULT", issues: parsed.error.issues }, 400);
   if (!(await loadExperiment(c.env, projectId, experimentId))) return c.json({ error: "EXPERIMENT_NOT_FOUND" }, 404);
-  const db = createDatabase(c.env); const existing = await db.select({ runNo: experimentResults.runNo }).from(experimentResults).where(eq(experimentResults.experimentId, experimentId));
+  const db = createDatabase(c.env);
   const id = crypto.randomUUID(); const now = new Date().toISOString();
   await db.insert(experimentResults).values({
-    id, experimentId, runNo: existing.length + 1, metricsJson: JSON.stringify(parsed.data.metrics), figuresJson: JSON.stringify(parsed.data.figures), notes: parsed.data.notes,
+    id, experimentId, runNo: await nextRunNo(db, experimentId), metricsJson: JSON.stringify(parsed.data.metrics), figuresJson: JSON.stringify(parsed.data.figures), notes: parsed.data.notes,
     sourceType: "manual", sourceName: "", rawDataJson: JSON.stringify(parsed.data.metrics), normalizedDataJson: JSON.stringify([parsed.data.metrics]), mappingJson: "{}",
     analysisJson: "", analysisStatus: "pending", model: null, generatedAt: null, createdAt: now,
   });
@@ -306,10 +318,10 @@ experimentRoutes.post("/projects/:projectId/experiments/:experimentId/results/im
   if (!(await loadExperiment(c.env, projectId, experimentId))) return c.json({ error: "EXPERIMENT_NOT_FOUND" }, 404);
   let rows: Array<Record<string, unknown>>;
   try { rows = normalizeImported(parsed.data); } catch (error) { return c.json({ error: "INVALID_RESULT_DATA", message: error instanceof Error ? error.message : "结果数据无法解析" }, 400); }
-  const db = createDatabase(c.env); const existing = await db.select({ runNo: experimentResults.runNo }).from(experimentResults).where(eq(experimentResults.experimentId, experimentId));
+  const db = createDatabase(c.env);
   const id = crypto.randomUUID(); const now = new Date().toISOString();
   await db.insert(experimentResults).values({
-    id, experimentId, runNo: existing.length + 1, metricsJson: JSON.stringify(rows[0] ?? {}), figuresJson: "[]", notes: parsed.data.notes,
+    id, experimentId, runNo: await nextRunNo(db, experimentId), metricsJson: JSON.stringify(rows[0] ?? {}), figuresJson: "[]", notes: parsed.data.notes,
     sourceType: parsed.data.sourceType, sourceName: parsed.data.sourceName, rawDataJson: JSON.stringify(parsed.data.data),
     normalizedDataJson: JSON.stringify(rows), mappingJson: JSON.stringify(parsed.data.mapping), analysisJson: "", analysisStatus: "pending", model: null, generatedAt: null, createdAt: now,
   });

@@ -45,10 +45,6 @@ function StatusMark({ type }: { type: EvidenceStatus }) {
 }
 
 function firstSelection(data: MatrixResponse): Selection | null {
-  const preferred = data.cells["ap:ochuman"];
-  if (preferred) {
-    return { rowId: "ap", rowLabel: "COCO AP (OKS)", groupLabel: "数据 / 指标", paperId: "ochuman" };
-  }
   const group = data.groups[0];
   const row = group?.rows[0];
   const paper = data.papers[0];
@@ -133,7 +129,6 @@ export function MatrixPage() {
 
   const selectedCell = selected && data ? data.cells[`${selected.rowId}:${selected.paperId}`] : undefined;
   const selectedPaper = selected && data ? data.papers.find((paper) => paper.id === selected.paperId) : undefined;
-  const selectedIsMetric = selected?.rowId === "ap" || selected?.rowId === "crowd";
   const verified = selectedCell?.status === "confirmed" && selectedCell.locked;
 
   function toggleGroup(id: string) {
@@ -304,7 +299,7 @@ export function MatrixPage() {
             {loading ? (
               <LoadingState
                 title="正在加载证据矩阵"
-                description="从 Turso 读取项目、论文和证据"
+                description="正在读取项目、论文和证据"
               />
             ) : null}
             {!loading && data ? (
@@ -444,37 +439,16 @@ export function MatrixPage() {
                 <span>{selectedCell?.sourcePage ?? "—"}</span>
                 <span>{selectedCell?.sourceSection ?? "—"}</span>
               </div>
-              <h3>{selectedIsMetric ? "Results on COCO" : "Method and analysis"}</h3>
-              <p>
-                We evaluate the proposed method in the context of occluded human pose estimation.{" "}
-                <mark>
-                  {selectedCell?.sourceExcerpt ?? "Select an evidence cell to inspect its source."}
-                </mark>{" "}
-                The paper provides the surrounding conditions and implementation details for this
-                statement.
-              </p>
-              {selectedIsMetric && selectedCell ? (
-                <div className="mini-table">
-                  <div>
-                    <b>Method</b>
-                    <b>AP</b>
-                    <b>AP50</b>
-                    <b>AP75</b>
-                  </div>
-                  <div>
-                    <span>HRNet-W48</span>
-                    <span>0.669</span>
-                    <span>0.877</span>
-                    <span>0.731</span>
-                  </div>
-                  <div className="highlight">
-                    <span>{selectedPaper?.name}</span>
-                    <strong>{selectedCell.value}</strong>
-                    <strong>0.928</strong>
-                    <strong>0.872</strong>
-                  </div>
-                </div>
-              ) : null}
+              <h3>{selected ? `${selected.rowLabel} · ${selectedPaper?.title ?? "未命名论文"}` : "尚未选择证据"}</h3>
+              {!selectedCell ? (
+                <p className="source-empty">从上方矩阵中选择一个证据单元格，即可查看它的原文摘录。</p>
+              ) : selectedCell.sourceExcerpt.trim() ? (
+                <p>
+                  <mark>{selectedCell.sourceExcerpt}</mark>
+                </p>
+              ) : (
+                <p className="source-empty">该单元格还没有原文摘录。运行「AI 证据提取」后，会在这里显示对应页码的论文原文。</p>
+              )}
             </div>
             <footer>
               <div className="verification-options">

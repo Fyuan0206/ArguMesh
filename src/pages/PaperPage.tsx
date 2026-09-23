@@ -113,7 +113,7 @@ export function PaperPage() {
   }
 
   return <div className="route-page paper-page">
-    <PageHeader eyebrow={`${project?.name ?? "项目"} · Paper`} title={paper.title} description={`${paper.authors} · ${paper.venue} ${paper.year}`} actions={<><Link className="secondary-button" to={`/projects/${encodeURIComponent(projectId)}/library/${encodeURIComponent(paperId)}/read`}><BookOpenText />阅读 PDF</Link><Link className="secondary-button" to="/knowledge"><Quotes />查看知识</Link></>} />
+    <PageHeader eyebrow={`${project?.name ?? "项目"} · Paper`} title={paper.title} description={`${paper.authors} · ${paper.venue} ${paper.year}`} actions={<><Link className="secondary-button" to={`/projects/${encodeURIComponent(projectId)}/library/${encodeURIComponent(paperId)}/read`}><BookOpenText />阅读 PDF</Link><Link className="secondary-button" to={`/projects/${encodeURIComponent(projectId)}/research?view=insights`}><Quotes />项目研究脉络</Link></>} />
     <div className="paper-workspace-grid">
       <form className="surface-card paper-card-editor" onSubmit={save}>
         <header><div><span className="eyebrow">Paper Card</span><h2>结构化论文资产</h2></div>

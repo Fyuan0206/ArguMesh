@@ -4,6 +4,7 @@ export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  /** @deprecated 废弃列:`server/` 只读不写,恒为 0。活值是 `matrices.extraction_progress`(提取任务在写)。删列需要表重建迁移,暂保留。 */
   extractionProgress: integer("extraction_progress").notNull().default(0),
   createdAt: text("created_at").notNull(),
   archivedAt: text("archived_at"),
@@ -24,6 +25,7 @@ export const papers = sqliteTable("papers", {
   arxivId: text("arxiv_id"),
   sourceUrl: text("source_url"),
   fileHash: text("file_hash"),
+  /** R2 时期遗留列:`server/` 只读不写,没有写入方。判断「论文有没有 PDF」请查 `paper_files` 表。 */
   r2Key: text("r2_key"),
   mimeType: text("mime_type"),
   fileSize: integer("file_size"),
@@ -526,6 +528,7 @@ export const experimentResults = sqliteTable(
     normalizedDataJson: text("normalized_data_json").notNull().default("[]"),
     mappingJson: text("mapping_json").notNull().default("{}"),
     analysisJson: text("analysis_json").notNull().default(""),
+    // 枚举含 confirmed,但没有任何写入路径把它置为 confirmed(只有 pending→draft);保留供后续确认接口使用。
     analysisStatus: text("analysis_status", { enum: ["pending", "draft", "confirmed"] }).notNull().default("pending"),
     model: text("model"),
     generatedAt: text("generated_at"),
@@ -608,6 +611,7 @@ export const evidenceLayers = sqliteTable(
     quote: text("quote").notNull().default(""),
     page: integer("page").notNull().default(1),
     location: text("location"),
+    // 枚举含 confirmed,但没有任何写入路径把它置为 confirmed(始终 draft);保留供后续确认接口使用。
     status: text("status", { enum: ["draft", "confirmed"] }).notNull().default("draft"),
     promotedTo: text("promoted_to"),
     source: text("source", { enum: ["human", "ai"] }).notNull().default("human"),

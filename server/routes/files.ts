@@ -59,7 +59,9 @@ fileRoutes.put("/papers/:paperId/file", async (c) => {
     .set({ mimeType: "application/pdf", fileSize: data.byteLength })
     .where(eq(papers.id, paperId));
 
-  return c.json({ paperId, size: data.byteLength, cloudStored: true }, 201);
+  // `cloudStored: false` —— PDF 落在本地 SQLite(`paper_files` 表),没有云端副本。
+  // 前端据此区分「已入库」与「只存在当前浏览器 IndexedDB」两种上传结果。
+  return c.json({ paperId, size: data.byteLength, cloudStored: false }, 201);
 });
 
 fileRoutes.get("/papers/:paperId/file", async (c) => {

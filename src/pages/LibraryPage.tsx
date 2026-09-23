@@ -115,14 +115,15 @@ export function LibraryPage() {
       const [metadata, hash] = await Promise.all([inspectPdf(file), sha256File(file)]);
       const title = metadata.title || file.name.replace(/\.pdf$/i, "").trim() || "未命名文献";
       const paperId = addPaper({ title, authors: metadata.authors, venue: "本地 PDF", year: new Date().getFullYear(), projectIds: [currentProjectId], fileHash: hash, fileName: file.name, fileSize: file.size, pageCount: metadata.pageCount, outline: metadata.outline });
-      update({ paperId, status: "uploading", progress: .1, message: "本地已保存，正在同步云端" });
+      update({ paperId, status: "uploading", progress: .1, message: "本地已保存，正在写入文献库" });
       await savePaperPdf(paperId, file);
       setPaperFile(paperId, { name: file.name, size: file.size });
       await syncProject(currentProject);
       const storedPaper = { id: paperId, title, authors: metadata.authors, venue: "本地 PDF", year: new Date().getFullYear(), fileHash: hash };
       const synced = await syncPaper(currentProjectId, storedPaper);
       const upload = await uploadPaperFile(synced.paperId, file, (progress) => update({ progress: .1 + progress * .9 }));
-      const localOnlyMessage = upload.cloudStored ? "上传完成" : "已保存到当前浏览器（云端 PDF 未启用）";
+      // `cloudStored:false` = PDF 已写入本地 SQLite 库(本项目没有云端副本),如实告知落点。
+      const localOnlyMessage = upload.cloudStored ? "上传完成" : "已保存到本地文献库";
       update({ paperId, status: "done", progress: 1, message: synced.duplicate ? "已去重并关联到当前项目" : localOnlyMessage });
     } catch (error) {
       update({ status: "failed", message: error instanceof Error ? error.message : "上传失败" });

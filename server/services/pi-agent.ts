@@ -521,7 +521,7 @@ export async function runPiAgentTurn(
       .join("\n")
       .trim();
   }
-  if (!reply) reply = "(no text reply this turn)";
+  if (!reply) reply = "（本回合没有文字回复）";
 
   const citations = citationsFromActions(state.recordedActions);
   onEvent({ type: "agent_end" });

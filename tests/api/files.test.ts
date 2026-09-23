@@ -43,7 +43,8 @@ describe("paper file upload (PDF in SQLite)", () => {
     );
     expect(upload.status).toBe(201);
     const payload = (await upload.json()) as { paperId: string; size: number; cloudStored: boolean };
-    expect(payload).toMatchObject({ paperId: "file-paper-1", size: pdf.byteLength, cloudStored: true });
+    // `cloudStored:false` = PDF 落在本地 SQLite,没有云端副本(本项目零云依赖)。
+    expect(payload).toMatchObject({ paperId: "file-paper-1", size: pdf.byteLength, cloudStored: false });
 
     const download = await app.request(
       "http://localhost/api/papers/file-paper-1/file",
@@ -75,5 +76,21 @@ describe("paper file upload (PDF in SQLite)", () => {
     expect(response.status).toBe(404);
     const payload = (await response.json()) as { error?: string };
     expect(payload.error).toBe("FILE_NOT_FOUND");
+  });
+});
+
+describe("paper hasFile reflects the paper_files table", () => {
+  it("is true only for papers that actually have a PDF row", async () => {
+    const response = await app.request(
+      "http://localhost/api/papers?projectId=file-project",
+      { },
+      ctx.bindings,
+    );
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { papers: Array<{ id: string; hasFile: boolean }> };
+    const byId = new Map(payload.papers.map((paper) => [paper.id, paper.hasFile]));
+    // 回归:hasFile 曾恒为 false(读的是从不写入的 papers.r2_key)。
+    expect(byId.get("file-paper-1")).toBe(true);
+    expect(byId.get("file-paper-2")).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { createDatabase } from "../db/client";
-import { papers, projectPapers, projects } from "../db/schema";
+import { papers, paperFiles, projectPapers, projects } from "../db/schema";
 import type { AppEnv } from "../types";
 
 /**
@@ -49,7 +49,6 @@ interface PaperRow {
   arxivId: string | null;
   sourceUrl: string | null;
   fileHash: string | null;
-  r2Key: string | null;
   mimeType: string | null;
   fileSize: number | null;
   createdAt: string;
@@ -62,7 +61,17 @@ interface PaperRow {
   archivedAt: string | null;
 }
 
-function paperToDto(row: PaperRow) {
+/**
+ * 哪些论文真的有 PDF 本体——真相是 `paper_files` 表(每篇至多一行),
+ * `papers.r2_key` 是 R2 时期遗留列、`server/` 里只读不写,拿它判空恒为 false。
+ */
+async function paperIdsWithFiles(db: ReturnType<typeof createDatabase>, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await db.select({ paperId: paperFiles.paperId }).from(paperFiles).where(inArray(paperFiles.paperId, ids));
+  return new Set(rows.map((row) => row.paperId));
+}
+
+function paperToDto(row: PaperRow, hasFile: boolean) {
   let tags: string[] = [];
   let outline: Array<{ title: string; page: number }> = [];
   try { tags = JSON.parse(row.tagsJson) as string[]; } catch { tags = []; }
@@ -81,7 +90,7 @@ function paperToDto(row: PaperRow) {
     arxivId: row.arxivId,
     sourceUrl: row.sourceUrl,
     fileHash: row.fileHash,
-    hasFile: Boolean(row.r2Key),
+    hasFile,
     mimeType: row.mimeType,
     fileSize: row.fileSize,
     createdAt: row.createdAt,
@@ -106,21 +115,24 @@ paperRoutes.get("/papers", async (c) => {
       .where(and(eq(projectPapers.projectId, url), isNull(papers.archivedAt)))
       .orderBy(asc(projectPapers.sortOrder), asc(papers.createdAt))
       .all();
-    return c.json({ papers: rows.map((r) => paperToDto(r.papers as PaperRow)) });
+    const withFiles = await paperIdsWithFiles(db, rows.map((r) => r.papers.id));
+    return c.json({ papers: rows.map((r) => paperToDto(r.papers as PaperRow, withFiles.has(r.papers.id))) });
   }
   const parsed = idsQuerySchema.safeParse({ ids: c.req.query("ids") ?? "" });
   if (!parsed.success || !parsed.data.ids) return c.json({ error: "MISSING_IDS", message: "请提供 ids 查询参数" }, 400);
   const ids = [...new Set(parsed.data.ids.split(",").map((id) => id.trim()).filter(Boolean).slice(0, 200))];
   if (ids.length === 0) return c.json({ papers: [] });
   const rows = await db.select().from(papers).where(inArray(papers.id, ids)).all();
-  return c.json({ papers: rows.map((row) => paperToDto(row as PaperRow)) });
+  const withFiles = await paperIdsWithFiles(db, ids);
+  return c.json({ papers: rows.map((row) => paperToDto(row as PaperRow, withFiles.has(row.id))) });
 });
 
 paperRoutes.get("/papers/:paperId", async (c) => {
   const db = createDatabase(c.env);
   const row = await db.select().from(papers).where(eq(papers.id, c.req.param("paperId"))).get();
   if (!row) return c.json({ error: "PAPER_NOT_FOUND", message: "论文不存在" }, 404);
-  return c.json({ paper: paperToDto(row as PaperRow) });
+  const withFiles = await paperIdsWithFiles(db, [row.id]);
+  return c.json({ paper: paperToDto(row as PaperRow, withFiles.has(row.id)) });
 });
 
 paperRoutes.patch("/papers/:paperId", async (c) => {
@@ -151,7 +163,8 @@ paperRoutes.patch("/papers/:paperId", async (c) => {
 
   await db.update(papers).set(set).where(eq(papers.id, id));
   const updated = await db.select().from(papers).where(eq(papers.id, id)).get();
-  return c.json({ paper: paperToDto(updated as PaperRow) });
+  const withFiles = await paperIdsWithFiles(db, [id]);
+  return c.json({ paper: paperToDto(updated as PaperRow, withFiles.has(id)) });
 });
 
 paperRoutes.patch("/papers/:paperId/archive", async (c) => {

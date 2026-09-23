@@ -113,7 +113,8 @@ export function ResearchQuestionsPage() {
   function convertGapToIdea(gap: Gap, pid: string) {
     createIdea(pid, { title: gap.title, summary: gap.description || gap.rationale, sourceGapId: gap.id })
       .then((res) => {
-        patchGap(pid, gap.id, { status: "converted", convertedIdeaId: res.idea.id }).catch(() => {});
+        // 反向链接记在 ideas.source_gap_id 上,gaps 侧只需推进状态。
+        patchGap(pid, gap.id, { status: "converted" }).catch(() => {});
         navigate(`/projects/${encodeURIComponent(pid)}/ideas/${encodeURIComponent(res.idea.id)}/canvas`);
       })
       .catch(() => setError("转 Idea 失败,请重试。"));

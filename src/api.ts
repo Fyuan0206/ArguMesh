@@ -125,12 +125,6 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export async function getMatrix(projectId: string): Promise<MatrixResponse> {
-  return parseResponse<MatrixResponse>(await fetch(`/api/projects/${encodeURIComponent(projectId)}/matrix`, {
-    headers: authenticatedHeaders(),
-  }));
-}
-
 export async function getMatrixById(matrixId: string): Promise<MatrixResponse> {
   return parseResponse<MatrixResponse>(await fetch(`/api/matrices/${encodeURIComponent(matrixId)}`, { headers: authenticatedHeaders() }));
 }
@@ -759,7 +753,7 @@ export async function listGaps(projectId: string): Promise<{ gaps: Array<Gap & {
 export async function patchGap(
   projectId: string,
   gapId: string,
-  patch: Partial<Pick<Gap, "title" | "description" | "rationale" | "note" | "status">> & { convertedIdeaId?: string },
+  patch: Partial<Pick<Gap, "title" | "description" | "rationale" | "note" | "status">>,
 ): Promise<{ gap: Gap }> {
   return parseResponse(await fetch(`/api/projects/${encodeURIComponent(projectId)}/gaps/${encodeURIComponent(gapId)}`, {
     method: "PATCH", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(patch),
