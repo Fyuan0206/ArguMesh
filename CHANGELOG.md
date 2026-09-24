@@ -8,15 +8,29 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 
 ---
 
+## Docs (2026-09-24) — README download & install section
+
+- **Both READMEs gained a Download / 下载安装 section** linking the v3.2.5 Windows installer from [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5), with a short entry in each top feature list. The section repeats the three installer facts the release notes carry — **the installer ships an empty database** (re-enter your AI provider on the Settings page), **the build is unsigned** (SmartScreen will warn), **the app has no auth** (never expose its port) — plus install steps (`currentUser`, no administrator rights), first-launch latency (8–75 s against a 90 s budget), where data lives (`%LOCALAPPDATA%\ArguMesh\data`, written on first launch only so upgrades never touch it), and the `sidecar.log` troubleshooting entry.
+- **The deferred README download item is now done.** Code signing and `.github/workflows/release.yml` stay deferred (see `TODO.md`).
+
+<details><summary>中文</summary>
+
+- **两份 README 都新增了「下载安装」章节**，指向 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) 上的 v3.2.5 Windows 安装包，并在开头的特性列表里加了一条入口。章节重复了发布说明里那三条安装包事实——**安装包里是空库**（装完要在设置页重填 AI 提供方）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）——并写清安装步骤（`currentUser`，不需要管理员权限）、首次启动耗时（8–75 秒，壳等 90 秒）、数据位置（`%LOCALAPPDATA%\ArguMesh\data`，只在首次启动写入，升级不动它）与 `sidecar.log` 排错入口。
+- **「README 下载章节」这条暂缓项就此完成**；代码签名与 `.github/workflows/release.yml` 仍暂缓（见 `TODO.md`）。
+
+</details>
+
+---
+
 ## Release (2026-09-24) — v3.2.5 on GitHub Releases
 
-- **First GitHub Release**: [`v3.2.5`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) carries everything since v3.2.4, with a Windows NSIS installer (`ArguMesh_3.2.5_x64-setup.exe`, ~29.8 MB, `currentUser` install — no administrator rights) attached as a downloadable asset. The user re-raised distribution on 2026-09-24; the deferred-installer note in `TODO.md` is lifted for publishing, while code signing, `release.yml` CI, and a README download section remain unimplemented.
+- **First GitHub Release**: [`v3.2.5`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) carries everything since v3.2.4, with a Windows NSIS installer (`ArguMesh_3.2.5_x64-setup.exe`, ~29.8 MB, `currentUser` install — no administrator rights) attached as a downloadable asset. The user re-raised distribution on 2026-09-24; the deferred-installer note in `TODO.md` is lifted for publishing, while code signing and `release.yml` CI stay unimplemented. At release time the READMEs still had no download section — it was added the same day (see the entry above).
 - **Three facts the release notes state up front** (any future download section must repeat them): the installer ships an **empty database** — projects, papers, evidence and AI settings are not in it, so re-enter your provider on the Settings page after installing; the build is **unsigned**, so SmartScreen warns about an unknown publisher; the app has **no authentication**, so never expose its port to an untrusted network.
 - **Release process is manual and documented**: commit → tag → `gh release create` with a freshly built installer. The three-step build (`build` → `build:sidecar -- --node-exe` → `tauri build`) is in `docs/DEPLOYMENT.md` §3; the v3.2.5 artifact was verified by booting the sidecar directly and exercising the `PORT=0` / `ARGUMESH_PORT=` handshake, `/api/health`, the SPA and a static asset.
 
 <details><summary>中文</summary>
 
-- **第一个 GitHub Release**：[`v3.2.5`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) 涵盖 v3.2.4 之后的全部变更，并附带 Windows NSIS 安装包 `ArguMesh_3.2.5_x64-setup.exe`（约 29.8 MB，`currentUser` 安装，不需要管理员权限）作为可下载资产。用户于 2026-09-24 重新提出发布；`TODO.md` 中「安装包暂不发布」的暂缓就此解除，但**代码签名、`release.yml` CI、README 下载章节仍未做**。
+- **第一个 GitHub Release**：[`v3.2.5`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) 涵盖 v3.2.4 之后的全部变更，并附带 Windows NSIS 安装包 `ArguMesh_3.2.5_x64-setup.exe`（约 29.8 MB，`currentUser` 安装，不需要管理员权限）作为可下载资产。用户于 2026-09-24 重新提出发布；`TODO.md` 中「安装包暂不发布」的暂缓就此解除，但**代码签名与 `release.yml` CI 仍未做**。发布当时 README 还没有下载章节，当日补上（见上方条目）。
 - **发布说明开头写明的三条事实**（日后再加下载章节必须一并重复）：安装包里是**空库**——项目、文献、证据、AI 配置都不在里面，装完请到设置页重新填写提供方；构建**未签名**，SmartScreen 会提示发布者未知；应用**无鉴权**，不要把端口暴露到不可信网络。
 - **发布流程是手工的，且有文档**：提交 → 打 tag → `gh release create` 附带新构建的安装包。三步构建见 `docs/DEPLOYMENT.md` §3；v3.2.5 的产物在发布前验证过——直接启动 sidecar，走通 `PORT=0` / `ARGUMESH_PORT=` 握手、`/api/health`、SPA 首页与静态资源。
 

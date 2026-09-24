@@ -77,7 +77,7 @@ wrangler deploy --config <打印出的路径>   # 用已认证的 Wrangler CLI �
 
 ## 3. 桌面安装包（Tauri 2 + Node sidecar）
 
-> ✅ **安装包已对外发布**：`v3.2.5` 于 2026-09-24 带上 Windows 安装包发到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)（用户当日重新提出发布）。发布是**手工三步**：提交 → 打 tag → `gh release create` 附带新构建的安装包；`.github/workflows/release.yml` 仍未做。发布说明必须带上这三条事实：**安装包里是空库，AI 配置不随包带走**（装完要在设置页重填）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）。**README 仍无下载章节**。
+> ✅ **安装包已对外发布**：`v3.2.5` 于 2026-09-24 带上 Windows 安装包发到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)（用户当日重新提出发布）。发布是**手工三步**：提交 → 打 tag → `gh release create` 附带新构建的安装包；`.github/workflows/release.yml` 仍未做。发布说明、两份 README 的「下载安装」章节与 `CHANGELOG.md` 必须带上这三条事实：**安装包里是空库，AI 配置不随包带走**（装完要在设置页重填）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）。
 
 **桌面版与 Web 版的区别**：Web 版是单端口 Node 服务 + Vite 产物；桌面版是 **Tauri 2 薄壳 + Node sidecar**——壳只做三件事（复制空库、拉起 sidecar、把窗口指过去），不重复实现任何业务逻辑，真正的前端和 API 全在 `server.mjs` 里。
 
@@ -213,12 +213,13 @@ Rust 侧改动另外跑：`cd src-tauri && cargo test`（现有单测钉住 `\\?
 
 ### 3.9 明确未做
 
-安装包不对外发布，因此以下继续推迟，**不要主动开工**：
+安装包已对外发布，但以下仍未实施，**不要主动开工**：
 
-- 双语 README 的「下载 / 安装」章节
 - `.github/workflows/release.yml`（CI 出包）
 - 代码签名（Windows/Linux 未签名是参考项目 Open Science Desktop 的既有做法，不是阻塞项）
 - 壳的打磨、已有安装的升级迁移路径、Bun 探针
+
+> **已完成**：双语 README 的「下载 / 安装」章节 —— 2026-09-24 随发布一并补上（见 §3 顶部横幅）。
 
 ---
 
@@ -252,6 +253,6 @@ Rust 侧改动另外跑：`cd src-tauri && cargo test`（现有单测钉住 `\\?
 | `src-tauri/src/main.rs` | 薄壳：空库复制 / sidecar 生命周期 / 端口握手 / 日志 |
 | `src-tauri/assets/index.html` | 启动占位页（sidecar 起来后被 replace 掉） |
 | `build/sidecar/README.txt` | 自动生成的 sidecar 启动说明 |
-| [`DISTRIBUTION-RESEARCH-2026-09-20.md`](DISTRIBUTION-RESEARCH-2026-09-20.md) | 分发路线调研与决策依据（**已暂缓，不要实施**） |
+| [`DISTRIBUTION-RESEARCH-2026-09-20.md`](DISTRIBUTION-RESEARCH-2026-09-20.md) | 分发路线调研与决策依据（暂缓已于 2026-09-24 解除；构建与发布方法以本文 §3 为准） |
 
 `.gitignore` 中 `build/`、`dist/`、`src-tauri/target/`、`src-tauri/gen/` 均不入库。

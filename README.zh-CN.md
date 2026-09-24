@@ -20,6 +20,7 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 
 - **零云依赖**:数据全部保存在本地 SQLite 文件,不需要注册任何云服务
 - **开箱即用**:`pnpm install && pnpm run db:seed && pnpm run dev` 即可启动,无需登录
+- **也可以直接下载**:每个 [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases) 都附带预构建的 Windows 安装包(见[下载安装](#下载安装))
 - **可让 AI 代为部署**:把 [让 AI 部署](#让-ai-部署) 中的提示词发给 Cursor / Claude Code / Codex / Copilot 等编程助手即可
 - **单用户**:无需登录、无需账号;一台机器上即可运行的本地优先工作台
 - **AI 可选**:接入任意 OpenAI 兼容 API(OpenAI / DeepSeek / StepFun / 本地模型等),不配置也能使用全部人工流程
@@ -161,6 +162,38 @@ API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePa
 ```
 
 人工逐步安装见下方 [部署](#部署)。
+
+## 下载安装
+
+不想碰命令行?每个 [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases) 都附带预构建的 Windows 安装包:
+
+| 文件 | 适用 |
+| --- | --- |
+| [`ArguMesh_3.2.5_x64-setup.exe`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) | Windows 10/11 x64 —— 约 30 MB,`currentUser` 安装,**不需要管理员权限** |
+
+> ⚠️ **安装前必须知道的三件事**
+>
+> 1. **安装包里是空库。** 你的项目、文献、证据和 AI 配置都**不在**安装包里。装完请到**设置页**重新填写 AI 提供方(Base URL / API Key / 模型名)——在此之前,第一次用到 AI 功能会提示「未配置」。
+> 2. **没有代码签名。** Windows SmartScreen 会提示发布者未知——这是预期行为,不是缺陷。点「**更多信息 → 仍要运行**」。
+> 3. **应用没有鉴权。** 它只监听 localhost,但所有 `/api/*` 路由都可直接访问。**不要把它的端口暴露到不可信网络。**
+
+### 安装步骤
+
+1. 在 Release 页面下载 `.exe`。
+2. 双击安装。`currentUser` 模式**不需要管理员权限**;安装器语言可选 English / 简体中文。
+3. 启动。首次启动可能较慢(**8–75 秒**)——杀毒软件在扫随包的 Node sidecar,壳最多等 90 秒。
+
+### 数据存放在哪
+
+安装器**只在首次启动时**把一份空库复制到 `%LOCALAPPDATA%\ArguMesh\data\argumesh.db`;已存在的数据库一律不动——升级或重装都不会丢你的项目。想清空重来:卸载后删掉这个文件夹。
+
+排错入口:`%LOCALAPPDATA%\ArguMesh\sidecar.log`,记录 sidecar 路径、PID 与全部 stderr。
+
+### 不用 Windows?
+
+从源码跑即可——见下方[部署](#部署)(`pnpm install` → `pnpm run db:seed` → `pnpm run dev`),或把[让 AI 部署](#让-ai-部署)的提示词发给编程助手。
+
+桌面版是包在同一份 Hono 应用外面的 Tauri 薄壳,功能与 Web 版完全一致。想自己构建,见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) 第 3 节。
 
 ## 部署
 

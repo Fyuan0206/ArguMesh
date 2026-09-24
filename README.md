@@ -20,6 +20,7 @@ Stop shuffling information between PDF readers, spreadsheets, note apps, and cha
 
 - **Zero cloud dependencies** — all data lives in a local SQLite file; no sign-ups, no vendor lock-in
 - **Works out of the box** — `pnpm install && pnpm run db:seed && pnpm run dev`, no login required
+- **Or just download it** — a prebuilt Windows installer is attached to every [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases) (see [Download](#download))
 - **Ask an AI to deploy it** — paste the prompt in [Deploy with AI](#deploy-with-ai) into Cursor, Claude Code, Codex, or Copilot
 - **Single-user** — no accounts, no auth; a local workbench that runs on one machine
 - **AI is optional** — plug in any OpenAI-compatible endpoint; every manual workflow works without it
@@ -163,6 +164,38 @@ Do not start extra services. Confirm the app is up by hitting GET /api/health.
 ```
 
 Manual steps for humans are in [Deployment](#deployment) below.
+
+## Download
+
+Prefer not to touch a terminal? A prebuilt Windows installer is attached to every [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases):
+
+| File | For |
+| --- | --- |
+| [`ArguMesh_3.2.5_x64-setup.exe`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) | Windows 10/11 x64 — ~30 MB, `currentUser` install (no administrator rights) |
+
+> ⚠️ **Read this before you install**
+>
+> 1. **The installer ships an empty database.** Your projects, papers, evidence, and AI settings are *not* inside it. After installing, open **Settings** and fill in your AI provider again (Base URL / API Key / model) — until you do, the first AI feature you touch will say 未配置.
+> 2. **The build is not code-signed.** Windows SmartScreen will warn that the publisher is unknown. That is expected, not a defect — click **More info → Run anyway**.
+> 3. **The app has no authentication.** It listens on localhost only, but every `/api/*` route is directly reachable. Do not expose its port to a network you do not trust.
+
+### Install
+
+1. Download the `.exe` from the release page.
+2. Double-click it. `currentUser` mode means **no administrator rights are needed**; the installer offers English + 简体中文.
+3. Launch ArguMesh. First launch can be slow (**8–75 s**) while antivirus scans the bundled Node sidecar — the shell waits up to 90 s.
+
+### Where your data lives
+
+The installer copies an empty database to `%LOCALAPPDATA%\ArguMesh\data\argumesh.db` **on first launch only**; an existing database is never touched, so upgrading or reinstalling keeps your projects. To start over, uninstall and delete that folder.
+
+Troubleshooting entry point: `%LOCALAPPDATA%\ArguMesh\sidecar.log` — it records the sidecar path, its PID, and all of its stderr.
+
+### Not on Windows?
+
+Run it from source instead — see [Deployment](#deployment) below (`pnpm install` → `pnpm run db:seed` → `pnpm run dev`), or paste the [Deploy with AI](#deploy-with-ai) prompt into a coding agent.
+
+The desktop build is a thin Tauri shell around the same Hono app, so it has no features the web build lacks. To build it yourself, follow the recipe in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §3.
 
 ## Deployment
 
