@@ -253,7 +253,17 @@ for (const specifier of NATIVE_PACKAGES) {
   );
 }
 
-await cp(parserDir, path.join(outDir, "mineru-runtime"), { recursive: true });
+const parserDest = path.join(outDir, "mineru-runtime");
+if (process.platform === "win32") {
+  // Native directory copying handles large wheel trees without fs.cp's transient
+  // opendir failures on Windows. Robocopy exit codes 0–7 are successful copies.
+  const copied = spawnSync(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "robocopy.exe"),
+    [parserDir, parserDest, "/E", "/MT:4", "/R:2", "/W:1", "/NFL", "/NDL", "/NJH", "/NJS", "/NP"],
+    { stdio: "inherit", windowsHide: true });
+  if (copied.error || copied.status === null || copied.status >= 8) throw new Error("[sidecar] Portable parser copy failed");
+} else {
+  await cp(parserDir, parserDest, { recursive: true });
+}
 
 // 4. 前端产物
 if (!(await exists(path.join(root, "dist", "index.html")))) {

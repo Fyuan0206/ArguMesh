@@ -1,8 +1,9 @@
 // Windows x64 portable parser. Models are deliberately NOT part of this directory.
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { bundleVcRuntime } from "./build-vc-runtime.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const target = path.join(root, "build", "mineru-runtime");
@@ -37,6 +38,13 @@ if (manifest?.fingerprint !== fingerprint) {
   console.log("[mineru-runtime] Installing locked CPU dependencies…");
   await run("uv", ["pip", "install", "--python", path.join(target, "python.exe"), "--target", path.join(target, "Lib", "site-packages"), "--require-hashes", "--only-binary", ":all:", "--index-strategy", "unsafe-best-match", "-r", lock]);
 }
+// Windows torch wheels include multi-GB C++ static link archives. Inference loads
+// DLLs / PYDs, never these development .lib files; retain all executable libraries.
+const torchLib = path.join(target, "Lib", "site-packages", "torch", "lib");
+for (const file of await readdir(torchLib, { withFileTypes: true })) {
+  if (file.isFile() && file.name.endsWith(".lib")) await rm(path.join(torchLib, file.name));
+}
+await bundleVcRuntime(root, target, run);
 await cp(path.join(root, "scripts", "mineru", "runner.py"), path.join(target, "runner.py"));
 await cp(lock, path.join(target, "requirements.lock"));
 await run(path.join(target, "python.exe"), ["-I", path.join(target, "runner.py"), "check"]);

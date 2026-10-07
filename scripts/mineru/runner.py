@@ -20,10 +20,22 @@ def prepare():
     checkpoint = config_path.with_name("prepared-groups.json")
     try:
         completed = json.loads(checkpoint.read_text(encoding="utf-8"))
+        if not isinstance(completed, list) or not all(isinstance(item, str) for item in completed):
+            completed = []
     except (OSError, ValueError):
         completed = []
     # The CLI rejects an explicit 'auto' environment value; its config supports auto detection.
-    os.environ.pop("MINERU_MODEL_SOURCE", None)
+    requested_source = os.environ.get("MINERU_MODEL_SOURCE")
+    if requested_source == "auto":
+        os.environ.pop("MINERU_MODEL_SOURCE", None)
+    elif requested_source in ("modelscope", "huggingface"):
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        if config.get("model-source") != requested_source:
+            # A source switch changes the snapshot root. Recheck every group in that root.
+            completed = []
+            config["models-dir"] = {}
+            config["model-source"] = requested_source
+            config_path.write_text(json.dumps(config), encoding="utf-8")
     for index, model in enumerate(paths):
         progress("downloading", index, len(paths))
         config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -54,12 +66,29 @@ def main():
         from mineru.backend.pipeline import model_init  # Validate the complete inference import chain.
         assert version("mineru") == "3.4.2"
         assert "+cpu" in torch.__version__
+        if sys.platform == "win32":
+            import ctypes
+            # A build machine's System32 DLL must not mask a missing private runtime.
+            filename = ctypes.windll.kernel32.GetModuleFileNameW
+            filename.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint]
+            for name in ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"):
+                library = ctypes.WinDLL(name)
+                buffer = ctypes.create_unicode_buffer(32768)
+                assert filename(library._handle, buffer, len(buffer))
+                assert Path(buffer.value).resolve().parent == Path(sys.executable).resolve().parent, name
         print(json.dumps({"mineru": version("mineru"), "torch": torch.__version__, "python": sys.version.split()[0]}))
         return
     config = Path(os.environ["MINERU_TOOLS_CONFIG_JSON"])
     config.parent.mkdir(parents=True, exist_ok=True)
-    if not config.exists():
-        config.write_text(json.dumps({"config_version": "1.3.2", "models-dir": {}, "model-source": "auto"}), encoding="utf-8")
+    try:
+        existing = json.loads(config.read_text(encoding="utf-8"))
+        if not isinstance(existing, dict) or not isinstance(existing.get("models-dir"), dict):
+            raise ValueError("Invalid model config")
+    except (OSError, ValueError):
+        # Recover a configuration interrupted during a write. Download caches remain intact.
+        temporary = config.with_suffix(".tmp")
+        temporary.write_text(json.dumps({"config_version": "1.3.2", "models-dir": {}, "model-source": "auto"}), encoding="utf-8")
+        temporary.replace(config)
     if mode == "prepare":
         prepare()
     elif mode == "parse":

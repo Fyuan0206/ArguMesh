@@ -54,9 +54,9 @@ pnpm tauri build
 
 ### 可选：本机 MinerU 精确解析
 
-桌面安装包内置 Python **3.13.16** 与 MinerU **3.4.2** 的 CPU `pipeline` 环境，无需用户安装解析工具。构建机需有 `uv`，先执行 `pnpm run build:mineru`：下载并校验官方 Python 嵌入包，按 `scripts/mineru/requirements-win-x64.lock` 哈希安装 wheel 到 `build/mineru-runtime/`。不包含模型、用户配置或 PDF。`build:sidecar` 会验证并拷贝完整解析环境。
+桌面安装包内置 Python **3.13.16** 与 MinerU **3.4.2** 的 CPU `pipeline` 环境，无需用户安装解析工具。构建机需有 `uv`，先执行 `pnpm run build:mineru`：下载并校验官方 Python 嵌入包，按 `scripts/mineru/requirements-win-x64.lock` 哈希安装 wheel 到 `build/mineru-runtime/`。微软官方 Visual C++ **14.44.35211** x64 包同样固定 SHA-256，仅提取应用私有 DLL 和许可文本，不运行其安装器、不写 System32。完整推理导入检查还会验证 C++ DLL 从私有目录加载，防止开发机已有运行库掩盖缺失依赖。移除 torch 中仅供 C++ 编译使用的 `.lib` 静态库，保留运行所需 DLL / PYD 和第三方许可文件。不包含模型、用户配置或 PDF。`build:sidecar` 会验证并拷贝完整解析环境。
 
-源码运行优先使用 `build/mineru-runtime/`，缺失时仍可使用 PATH 中的 MinerU 3.4.2 CLI；桌面版环境不完整时明确提示重新安装，不回退到用户 PATH。宿主设置 `ARGUMESH_MINERU_RUNTIME` 与 `ARGUMESH_DATA_DIR`（用户数据根目录）；缓存位于该根目录的 `data/mineru-cache/`，模型位于 `data/mineru-models/`。未设置宿主变量时使用仓库的 `data/`。首次下载有独立 30 分钟超时，CPU 单页解析有 10 分钟超时；模型组下载完成才进入解析。下载可取消，重试通过下载器检查并复用已有文件；模型配置不使用用户的全局 `mineru.json`。CLI 只在本机处理指定页，不调用 mineru.net 的文档上传 API。MinerU 4.x CLI 尚未接入。
+源码运行优先使用 `build/mineru-runtime/`，缺失时仍可使用 PATH 中的 MinerU 3.4.2 CLI；桌面版环境不完整时明确提示重新安装，不回退到用户 PATH。宿主设置 `ARGUMESH_MINERU_RUNTIME` 与 `ARGUMESH_DATA_DIR`（用户数据根目录）；缓存位于该根目录的 `data/mineru-cache/`，模型位于 `data/mineru-models/`。未设置宿主变量时使用仓库的 `data/`。首次通过 MinerU 官方支持的 ModelScope 仓库下载模型（无需账号或 API key），模型配置损坏时会自动重建并复用缓存。首次下载有独立 30 分钟超时，CPU 单页解析有 10 分钟超时；模型组下载完成才进入解析。下载可取消，重试通过下载器检查并复用已有文件；模型配置不使用用户的全局 `mineru.json`。CLI 只在本机处理指定页，不调用 mineru.net 的文档上传 API。MinerU 4.x CLI 尚未接入。
 
 `.env` 是可选的（dotenv）。模板在 `.env.example`，全部可选——不配任何 AI 也能跑，AI 功能会返回明确的「未配置」提示。
 

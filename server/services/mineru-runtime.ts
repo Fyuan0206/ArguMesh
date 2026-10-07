@@ -86,7 +86,7 @@ export async function runMineruCommand(args: string[], signal: AbortSignal, prog
   }
   const models = join(mineruDataDirectory(), "mineru-models");
   await mkdir(models, { recursive: true });
-  const env: NodeJS.ProcessEnv = { ...process.env, HF_HOME: join(models, "huggingface"), MODELSCOPE_CACHE: join(models, "modelscope"), MINERU_TOOLS_CONFIG_JSON: join(models, "mineru.json"), MINERU_DEVICE_MODE: "cpu", PYTHONUTF8: "1", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1", MINERU_MODEL_SOURCE: "auto" };
+  const env: NodeJS.ProcessEnv = { ...process.env, HF_HOME: join(models, "huggingface"), MODELSCOPE_CACHE: join(models, "modelscope"), MINERU_TOOLS_CONFIG_JSON: join(models, "mineru.json"), MINERU_DEVICE_MODE: "cpu", PYTHONUTF8: "1", PYTHONUNBUFFERED: "1", PYTHONDONTWRITEBYTECODE: "1", MINERU_MODEL_SOURCE: "modelscope" };
   // Parser children do not need the application's AI credentials.
   for (const key of Object.keys(env)) if (/API_KEY|AUTH_TOKEN|AI_PROVIDERS/.test(key)) delete env[key];
   const python = join(runtime, "python.exe");
