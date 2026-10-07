@@ -1,4 +1,15 @@
 export type EvidenceStatus = "draft" | "confirmed" | "conflict" | "missing";
+import type { ParsedPage } from "../server/services/mineru";
+import type { AppUpdate } from "../server/services/app-update";
+export type { AppUpdate } from "../server/services/app-update";
+
+export async function getAppUpdate(check: "auto" | "manual" = "auto"): Promise<AppUpdate> {
+  return parseResponse(await fetch(`/api/system/update?check=${check}`));
+}
+
+export async function openAppUpdate(target: "download" | "release"): Promise<{ opened: true }> {
+  return parseResponse(await fetch("/api/system/update/open", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ target }) }));
+}
 
 export interface MatrixPaper {
   id: string;
@@ -236,10 +247,20 @@ export async function extractMatrix(matrixId: string, input: { papers: Array<{ i
   }));
 }
 
-export async function translateSelection(input: { text: string; targetLanguage: "中文" | "English"; paperTitle: string; page: number; model?: string; provider?: string }) {
+export async function translateSelection(input: { text: string; targetLanguage: "中文" | "English"; paperTitle: string; page: number; model?: string; provider?: string; sourceType?: "figure-ocr" | "table" }, signal?: AbortSignal) {
   return parseResponse<{ translation: string; model: string }>(await fetch("/api/reader/translate", {
-    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input),
+    method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input), signal,
   }));
+}
+
+export async function parseReaderPage(paperId: string, page: number, cachedOnly = false, signal?: AbortSignal): Promise<ParsedPage> {
+  const query = new URLSearchParams({ paperId, page: String(page), ...(cachedOnly ? { cachedOnly: "true" } : {}) });
+  return parseResponse<ParsedPage>(await fetch(`/api/reader/parse-page?${query}`, { signal }));
+}
+
+export async function cancelReaderPageParse(paperId: string, page: number): Promise<{ cancelled: boolean }> {
+  const query = new URLSearchParams({ paperId, page: String(page) });
+  return parseResponse(await fetch(`/api/reader/parse-page?${query}`, { method: "DELETE" }));
 }
 
 export async function updateEvidence(
@@ -1514,4 +1535,3 @@ export async function analyzeKnowledge(projectId: string): Promise<{ analysis: K
     method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }),
   }));
 }
-

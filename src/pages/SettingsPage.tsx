@@ -1,6 +1,7 @@
 import { ArrowCounterClockwise, Check, Cpu, DownloadSimple, Eye, EyeSlash, Info, MagnifyingGlass, ShieldCheck, Trash, UploadSimple, UserCircle } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { UpdateSettings } from "../components/UpdateNotice";
 import { deleteAiConfig, getAiConfig, saveAiConfig, type AiConfig } from "../api";
 import { useWorkspace } from "../state/workspace";
 
@@ -113,6 +114,7 @@ export function SettingsPage() {
     <div className="route-page settings-page">
       <PageHeader eyebrow="设置" title="工作台设置" description="管理个人偏好、AI 接入与本地数据，让研究流程保持清晰可控。" />
       <form className="settings-stack" onSubmit={submit}>
+        <UpdateSettings />
         <section className="settings-section settings-personal" aria-labelledby="personal-settings-title">
           <header className="settings-section-header"><span><UserCircle /></span><div><h2 id="personal-settings-title">个人设置</h2><p>管理你的个人信息与编辑偏好。</p></div><button className="primary settings-header-action" type="submit">{saved ? <><Check />已保存</> : "保存设置"}</button></header>
           <div className="settings-section-body">

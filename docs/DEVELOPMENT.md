@@ -51,6 +51,10 @@ pnpm tauri build
 
 ## 环境变量
 
+### 可选：本机 MinerU 精确解析
+
+表格、公式和图片的结构化对照需要本机 `mineru` 命令。当前集成已用 MinerU **3.4.2** 的 `pipeline` CLI 验证；命令须在启动 ArguMesh 的同一环境中位于 `PATH`，可先运行 `mineru --version` 检查。未安装时「精确解析并翻译全文」会提示安装 MinerU；划词翻译、阅读问答和原文阅读仍可使用。首次解析会加载或下载 MinerU 模型，因此可能需要约一至数分钟；之后当前页结果按 PDF SHA-256 缓存在 `data/mineru-cache/`。CLI 只在本机处理当前页，不调用 mineru.net 的文档上传 API。MinerU 4.x 改用了 `mineru parse` / `mineru-kit` 命令树，当前尚未接入；见 [MinerU 官方 CLI 文档](https://github.com/opendatalab/MinerU/blob/master/docs/en/usage/cli_tools.md)。
+
 `.env` 是可选的（dotenv）。模板在 `.env.example`，全部可选——不配任何 AI 也能跑，AI 功能会返回明确的「未配置」提示。
 
 | 变量 | 默认 | 说明 |

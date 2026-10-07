@@ -49,7 +49,7 @@ Thanks to [StepFun](https://www.stepfun.com/) for supporting development and eva
 | --- | --- |
 | Papers scattered across folders, browsers, and note apps | Projects scope topics and their literature; search, filters, and tags keep them organized; **`literature/` folder sync** imports PDFs from a bound workspace without manual upload |
 | Highlights and summaries never get reused | The reader saves selections as Note / Claim / Evidence with paper + page attached |
-| Uploading whole PDFs to AI makes answers unverifiable | Reader Q&A submits only your selected passage, its page, and your question; bilingual 对照 submits only the current page's passages, and only after you press 翻译本页 — never the whole document |
+| Uploading whole PDFs to AI makes answers unverifiable | Reader Q&A submits only your selected passage, its page, and your question; bilingual 对照 submits only the current page's passages, and only after you press 精确解析并翻译全文 — never the whole document |
 | Manual spreadsheets make paper comparison inconsistent | The Evidence Matrix standardizes dimensions; every cell carries source, confidence, and verification state |
 | Notes, gaps, ideas, and questions live in separate tools | Research Thread unifies insights and research questions with provenance |
 | Experiments and writing are disconnected from evidence | Experiment analysis and LaTeX writing cite project evidence and can jump back into the workspace |
@@ -95,9 +95,9 @@ API: `POST /api/projects/:projectId/library/scan-inbox` (requires `workspacePath
 ### PDF reader with structured annotations
 Built-in PDF reader with OCR. **Select any passage and a floating bubble appears right at the selection** with 翻译 / 高亮 / 笔记 / 证据 one tap away:
 
-- **划词翻译** — the translation renders inline in the bubble (the sidebar card keeps the last result). Only the selected text, its page, and the paper title are sent — never the whole document. Repeating a selection is free: it is served from an in-memory cache. One call covers up to 8,000 characters — a sentence or a paragraph, not a whole page; an over-long selection is refused with an explicit message (and the sidebar character counter turns red) instead of being silently truncated. This is a per-selection translator, not a whole-document one: to read a full page, translate it section by section.
+- **划词翻译** — the translation renders inline in the bubble (the sidebar card keeps the last result). Only the selected text, its page, and the paper title are sent — never the whole document. Repeating a selection is free: it is served from an in-memory cache. One call covers up to 8,000 characters — a sentence or a paragraph, not a whole page; an over-long selection is refused with an explicit message (and the sidebar character counter turns red) instead of being silently truncated. Use the side-by-side reader below for whole-paper translation.
 - **原文高亮 + 锚定批注** — highlights, notes, and evidence are painted onto the PDF page as coloured marks anchored to the exact words. Marks are stored in PDF page units, so they stay in place across zoom, page turns, and reloads. Click a mark to jump back to its note in the sidebar.
-- **双语对照(左英文 / 右中文)** — the sidebar's 对照 tab splits the **current page** into ~400-character passages and shows the English above a slot for each translation. Nothing is sent until you press **翻译本页**: the page runs 3 passages at a time, with a live `已完成 x / y 段` counter and a cancel button (cancelling keeps — and caches — whatever already finished). Press **宽屏对照** to hide the sidebar and read PDF ≈55% / translation ≈45%. Translations are cached per paper + page + language in IndexedDB, so flipping back to a page you already read is instant and free; the cache stores the source text of every passage and re-validates it, so replacing the PDF can never show the previous paper's translation. This is **per-page**, not whole-document: turn the page and press the button again. Scanned PDFs get an inline **OCR 本页** button instead of a dead end. Click any English passage to drop it into the sidebar's selection box and switch back to 批注, where 高亮 / 笔记 / 证据 work as usual.
+- **Side-by-side translation** — the reader opens with the original PDF on the left and a paper-like translation page on the right. Both panes show the same page and scroll together. The fast reader uses PDF text positions and line spacing to keep paragraphs and section headings separate, following the source page's one- or two-column layout. **精确解析并翻译全文** starts one job for all pages: a **locally installed MinerU 3.x** parses one page at a time, then sends only that page's passages for translation, up to 3 requests at a time. The toolbar shows the page range, model, progress and cancellation. Completed pages are cached; restarting skips their finished passages. It restores table rows and merged cells; only textual cells are translated, while numeric values are locked to their exact source spelling and model identifiers remain unchanged. Equations retain their original visual form. Figures retain their source image, and local OCR extracts figure text before sending only that text for translation; diagram meaning is not inferred by the text-only model. Parsed pages are cached locally by PDF hash, restored on reopening the page, and translations are stored separately by parser version in IndexedDB. Nothing is sent to the translation model before a translation click. Scanned pages offer **OCR 本页**; OCR text has no PDF geometry, so its layout is approximate. **批注与问答** remains available from the translation toolbar; clicking a translated passage opens its original text for annotation.
 
 Saving a selection as a Note, Claim, or Evidence keeps the paper reference and page number attached. Ask the AI about a passage: only the text you selected, its page number, and your question are sent to the model — never the whole document.
 
@@ -145,15 +145,17 @@ Click an image to view it at full size.
 
 ## Download
 
+**Upgrade to v3.3.0:** download the new installer, close ArguMesh, and install over your current version. Existing research data and saved AI settings are retained. The desktop app now checks GitHub for new stable releases at startup, shows a dismissible download notice, and offers **Settings → 应用更新 → 检查更新**. This optional check sends no research content; failed checks do not block use. v3.2.5 has no in-app checker, so please upgrade once manually. MinerU 3.x must be installed separately for precise PDF translation.
+
 Prefer not to touch a terminal? A prebuilt Windows installer is attached to every [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases):
 
 | File | For |
 | --- | --- |
-| [`ArguMesh_3.2.5_x64-setup.exe`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5) | Windows 10/11 x64 — ~30 MB, `currentUser` install (no administrator rights) |
+| [`ArguMesh_3.3.0_x64-setup.exe`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0) | Windows 10/11 x64 — ~30 MB, `currentUser` install (no administrator rights) |
 
 > ⚠️ **Read this before you install**
 >
-> 1. **The installer ships an empty database.** Your projects, papers, evidence, and AI settings are *not* inside it. After installing, open **Settings** and fill in your AI provider again (Base URL / API Key / model) — until you do, the first AI feature you touch will say 未配置.
+> 1. **The installer ships an empty database.** Your projects, papers, evidence, and AI settings are *not* inside it. On a fresh installation, open **Settings** and fill in your AI provider (Base URL / API Key / model) — until you do, the first AI feature you touch will say 未配置.
 > 2. **The build is not code-signed.** Windows SmartScreen will warn that the publisher is unknown. That is expected, not a defect — click **More info → Run anyway**.
 > 3. **The app has no authentication.** It listens on localhost only, but every `/api/*` route is directly reachable. Do not expose its port to a network you do not trust.
 

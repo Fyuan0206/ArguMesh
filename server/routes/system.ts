@@ -8,8 +8,33 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { openNativePath, pickNativeDirectory } from "../services/native-picker";
 import type { AppEnv } from "../types";
+import { checkAppUpdate, currentVersion } from "../services/app-update";
 
 export const systemRoutes = new Hono<AppEnv>();
+
+systemRoutes.get("/system/update", async (c) => {
+  const mode = c.req.query("check") ?? "auto";
+  if (mode !== "auto" && mode !== "manual") return c.json({ error: "INVALID_CHECK" }, 400);
+  const desktop = c.env.ARGUMESH_DESKTOP === "1";
+  if (mode === "auto" && !desktop) return c.json({ currentVersion, status: "idle", desktop });
+  return c.json({ ...await checkAppUpdate(mode === "manual"), desktop });
+});
+
+// Open only URLs from a verified release, using the desktop's system browser.
+systemRoutes.post("/system/update/open", async (c) => {
+  if (c.env.ARGUMESH_DESKTOP !== "1") return c.json({ error: "DESKTOP_ONLY" }, 400);
+  const body = z.object({ target: z.enum(["download", "release"]) }).strict().safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "INVALID_TARGET" }, 400);
+  const update = await checkAppUpdate();
+  const url = body.data.target === "download" ? update.downloadUrl : update.releaseUrl;
+  if (!url) return c.json({ error: "UPDATE_UNAVAILABLE" }, 503);
+  try {
+    await openNativePath(url, AbortSignal.timeout(10_000));
+    return c.json({ opened: true });
+  } catch {
+    return c.json({ error: "OPEN_FAILED", message: "无法打开系统浏览器，请稍后重试" }, 503);
+  }
+});
 
 /** 同时只允许一个原生对话框,避免多标签页并发弹窗抢焦点。 */
 let pickerBusy = false;

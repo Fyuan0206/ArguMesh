@@ -38,7 +38,7 @@ export function inferAiApiFormat(baseUrl: string): "openai" | "anthropic" {
 export async function createStepFunCompletion(
   env: AppBindings,
   messages: StepFunMessage[],
-  options: { maxTokens?: number; timeoutMs?: number; thinkingMode?: boolean; model?: string; provider?: string; providerConfig?: AiProviderConfig } = {},
+  options: { maxTokens?: number; timeoutMs?: number; thinkingMode?: boolean; model?: string; provider?: string; providerConfig?: AiProviderConfig; signal?: AbortSignal } = {},
 ): Promise<string> {
   // 账户级自定义配置(设置页保存)优先;否则按 provider 从环境变量厂商里选(未指定时用第一个可用 provider)。
   const provider = options.providerConfig ?? findProvider(env, options.provider);
@@ -60,6 +60,10 @@ export async function createStepFunCompletion(
   };
   if (options.thinkingMode !== false) {
     body.reasoning_effort = "low";
+  } else if (new URL(baseUrl).hostname === "api.deepseek.com") {
+    // DeepSeek V4 defaults to thinking. `thinking_mode: false` is ignored there;
+    // the reasoning can exhaust max_tokens and leave an empty translation.
+    body.thinking = { type: "disabled" };
   } else {
     body.thinking_mode = false;
   }
@@ -70,7 +74,7 @@ export async function createStepFunCompletion(
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(options.timeoutMs ?? 55_000),
+    signal: options.signal ? AbortSignal.any([AbortSignal.timeout(options.timeoutMs ?? 55_000), options.signal]) : AbortSignal.timeout(options.timeoutMs ?? 55_000),
   });
 
   const payload = (await response.json().catch(() => null)) as StepFunResponse | null;
@@ -90,7 +94,7 @@ async function createAnthropicCompletion(
   baseUrl: string,
   apiKey: string,
   messages: StepFunMessage[],
-  options: { maxTokens?: number; timeoutMs?: number; model?: string },
+  options: { maxTokens?: number; timeoutMs?: number; model?: string; signal?: AbortSignal },
 ): Promise<string> {
   const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
   const response = await fetch(`${baseUrl}/v1/messages`, {
@@ -108,7 +112,7 @@ async function createAnthropicCompletion(
         .filter((message) => message.role !== "system")
         .map((message) => ({ role: message.role, content: message.content })),
     }),
-    signal: AbortSignal.timeout(options.timeoutMs ?? 55_000),
+    signal: options.signal ? AbortSignal.any([AbortSignal.timeout(options.timeoutMs ?? 55_000), options.signal]) : AbortSignal.timeout(options.timeoutMs ?? 55_000),
   });
 
   const payload = (await response.json().catch(() => null)) as AnthropicResponse | null;

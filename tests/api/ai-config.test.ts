@@ -19,6 +19,7 @@ interface ReceivedRequest {
   authorization: string;
   xApiKey: string;
   model: unknown;
+  messages: unknown;
 }
 
 let received: ReceivedRequest | null = null;
@@ -38,12 +39,13 @@ beforeAll(async () => {
     let raw = "";
     request.on("data", (chunk) => { raw += chunk; });
     request.on("end", () => {
-      const body = JSON.parse(raw || "{}") as { model?: unknown };
+      const body = JSON.parse(raw || "{}") as { model?: unknown; messages?: unknown };
       received = {
         url: request.url ?? "",
         authorization: request.headers.authorization ?? "",
         xApiKey: typeof request.headers["x-api-key"] === "string" ? request.headers["x-api-key"] : "",
         model: body.model,
+        messages: body.messages,
       };
       response.writeHead(200, { "content-type": "application/json" });
       response.end(request.url?.endsWith("/v1/messages")
@@ -104,6 +106,7 @@ describe("AI 配置 API", () => {
     );
     expect(response.status).toBe(200);
     expect(lastReceived()).toMatchObject({ url: "/v1/chat/completions", authorization: "Bearer sk-test-abc1234567", model: "test-model-x" });
+    expect(lastReceived()?.messages).toEqual(expect.arrayContaining([{ role: "user", content: "Hello world, this is a test." }]));
   });
 
   it("/anthropic Base URL 自动使用 Anthropic Messages API", async () => {

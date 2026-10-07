@@ -132,6 +132,7 @@ fn launch_sidecar(app: &tauri::AppHandle) -> Result<u16, String> {
         .current_dir(&sidecar_dir)
         // 见 server/node.ts:cwd 决定 serveStatic({root:"./dist"}) 能否找到前端
         .env("PORT", "0")
+        .env("ARGUMESH_DESKTOP", "1")
         .env("DATABASE_URL", format!("file:{}", db_path.display()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

@@ -18,6 +18,41 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 - Replaced the community QR code with the supplied PNG and updated both READMEs with its validity window (before October 14, 2026).
 - 更新微信群二维码，保留用户提供的 PNG 原图；中英文 README 同步注明有效期（2026 年 10 月 14 日前）。
 
+## Docs (2026-10-07) — README layout
+
+- Reorganized both READMEs with a centered title, language switch and section navigation. Download and local setup now precede the feature tour; secondary screenshots and the coding-agent deployment prompt are expandable. Acknowledgments now appear near the end.
+- 同步整理中英文 README：居中页首、语言切换与章节导航；下载安装和本地部署前置，次要截图与 AI 部署提示词可展开，致谢移至文末。
+
+## v3.3.0 (2026-10-07) — structured translation and update reminders
+
+- Desktop startup now checks the latest stable GitHub release and offers a dismissible installer download notice. Settings includes manual update checks; offline failures never block the workspace. Only public release metadata is requested.
+- 桌面版新增启动更新提醒和设置页手动检查更新，直接下载新安装包；关闭当前版本提醒后，下一版本仍会提示。网络失败不影响工作台，不发送研究内容。
+- Upgrade by closing the app and installing v3.3.0 over the current version; existing local data and AI settings are retained. New installations ship an empty database with no developer AI configuration. The installer is unsigned (SmartScreen may warn); the app has no authentication, so keep its local port off untrusted networks. MinerU 3.x is required separately for precise translation and is not bundled.
+- 请关闭应用后覆盖安装 v3.3.0，保留现有数据和 AI 配置；新安装使用空库，不带开发者 AI 配置。安装包未签名，SmartScreen 可能提示；应用无鉴权，不要向不可信网络暴露本地端口。本机 MinerU 3.x 需另装，未随包分发。
+
+- Added local MinerU parsing for the current PDF page. Tables now retain rows, columns, and merged cells; only labels are translated, while numeric results and model identifiers stay exact. Display equations and figures retain their source images; figure text can be OCR'd locally and translated after low-confidence OCR marks are filtered. Parsed pages use a PDF-hash cache, and MinerU translations have a separate IndexedDB cache version.
+- 新增本机 MinerU 当前页精确解析。表格保留行列与合并单元格，只翻译文字标签，实验数值和模型标识原样保留；公式和图片保留原图，图中文字在本机 OCR 过滤低置信度杂点后翻译。解析结果按 PDF 哈希缓存，译文使用独立的本机解析版本缓存。
+- Simplified the reader toolbar to one “精确解析并翻译全文” action. One click now parses and translates every page in sequence, starting with the visible page. It shows the model and page-level progress, can be cancelled, and resumes from cached page translations; only the page being processed is sent to the model. Removed the separate parse-only and plain-text translation actions.
+- 阅读器工具栏只保留「精确解析并翻译全文」入口。点击一次从当前页开始逐页解析、翻译整篇论文，显示模型和逐页进度，可取消并复用已缓存的译文；模型每次只接收正在处理的单页分段。移除单独解析和仅翻译文字按钮。
+- Locked numbers in mixed table labels and captions during translation, then restored the exact source values. This prevents cells such as “Model 1” from silently becoming “模型一”.
+- 翻译带数字的表格标签与表题时先锁定数字，再恢复原文数值；避免「Model 1」被模型改写成「模型一」。
+- Send only the source passage to the translation model and ignore cached responses that echo request metadata, so those passages are translated again on resume.
+- 翻译请求只向模型提供原文段落；缓存若混入请求字段，继续翻译时会跳过并重新翻译该段。
+- Retry transient empty API responses while parsing pages in the whole-paper job, avoiding a manual restart after a local development server reload.
+- 全文任务遇到本地开发服务短暂重载导致的空响应时自动重试当前页，减少手动续跑。
+- Fixed DeepSeek translation requests that could return an empty answer after consuming the token budget on internal reasoning; figure OCR translation now asks for readable labels only.
+- 修复 DeepSeek 翻译偶尔将 token 耗在内部推理而返回空正文的问题；图中文字只翻译可辨认的标签，不猜测模糊片段。
+
+- The PDF reader now opens in a two-page comparison view: original PDF on the left, a translated paper page on the right, with matched page turns and synchronized scrolling. One explicit click starts sequential page translation, with OCR, progress, and cancellation. Notes and Q&A remain one click away.
+- Translation now reconstructs paragraphs and section headings from PDF text geometry and uses the source page's column count. It no longer splits every page into arbitrary ~400-character chunks or forces single-column originals into a two-column translation. Layout-aware translations use a separate cache key, preserving earlier cached results without displaying them under the wrong structure; affected pages need a new translation.
+
+<details><summary>中文</summary>
+
+- PDF 阅读器默认左右对照：左侧原文 PDF，右侧译文纸页，同页翻页并同步滚动。点击一次逐页完成整篇翻译，并保留 OCR、进度和取消；批注与问答可随时切回。
+- 译文现在利用 PDF 文字坐标恢复段落和章节标题，并跟随原页单栏或双栏，不再按约 400 字任意截断或强制双栏。新版译文使用独立缓存键，旧译文仍保留但不以错误结构展示；相关页面需要重新翻译一次。
+
+</details>
+
 ## Docs (2026-09-24) — README download & install section
 
 - **Both READMEs gained a Download / 下载安装 section** linking the v3.2.5 Windows installer from [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5), with a short entry in each top feature list. The section repeats the three installer facts the release notes carry — **the installer ships an empty database** (re-enter your AI provider on the Settings page), **the build is unsigned** (SmartScreen will warn), **the app has no auth** (never expose its port) — plus install steps (`currentUser`, no administrator rights), first-launch latency (8–75 s against a 90 s budget), where data lives (`%LOCALAPPDATA%\ArguMesh\data`, written on first launch only so upgrades never touch it), and the `sidecar.log` troubleshooting entry.

@@ -77,7 +77,9 @@ wrangler deploy --config <打印出的路径>   # 用已认证的 Wrangler CLI �
 
 ## 3. 桌面安装包（Tauri 2 + Node sidecar）
 
-> ✅ **安装包已对外发布**：`v3.2.5` 于 2026-09-24 带上 Windows 安装包发到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)（用户当日重新提出发布）。发布是**手工三步**：提交 → 打 tag → `gh release create` 附带新构建的安装包；`.github/workflows/release.yml` 仍未做。发布说明、两份 README 的「下载安装」章节与 `CHANGELOG.md` 必须带上这三条事实：**安装包里是空库，AI 配置不随包带走**（装完要在设置页重填）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）。
+> ✅ **最新安装包 v3.3.0**：[GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0)。关闭应用后覆盖安装会保留现有本地研究数据与 AI 配置；新安装使用空库。桌面版新增启动更新提醒，设置页可手动检查，下载与说明链接通过系统浏览器打开。v3.2.5 用户需先手动升级一次；本机 MinerU 3.x 不随安装包分发。
+
+> **首次发布记录**：`v3.2.5` 于 2026-09-24 带上 Windows 安装包发到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)（用户当日重新提出发布）。发布是**手工三步**：提交 → 打 tag → `gh release create` 附带新构建的安装包；`.github/workflows/release.yml` 仍未做。发布说明、两份 README 的「下载安装」章节与 `CHANGELOG.md` 必须带上这三条事实：**安装包里是空库，AI 配置不随包带走**（装完要在设置页重填）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）。
 
 **桌面版与 Web 版的区别**：Web 版是单端口 Node 服务 + Vite 产物；桌面版是 **Tauri 2 薄壳 + Node sidecar**——壳只做三件事（复制空库、拉起 sidecar、把窗口指过去），不重复实现任何业务逻辑，真正的前端和 API 全在 `server.mjs` 里。
 

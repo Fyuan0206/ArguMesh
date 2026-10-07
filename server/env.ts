@@ -24,6 +24,7 @@ export function loadBindings(): AppBindings {
   const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
   if (databaseUrl.startsWith("file:")) ensureDatabaseDirectory(databaseUrl);
   return {
+    ARGUMESH_DESKTOP: process.env.ARGUMESH_DESKTOP,
     DATABASE_URL: databaseUrl,
     DATABASE_AUTH_TOKEN: process.env.DATABASE_AUTH_TOKEN,
     STEPFUN_BASE_URL: process.env.STEPFUN_BASE_URL,

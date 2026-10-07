@@ -1,5 +1,7 @@
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy, type PDFPageProxy } from "pdfjs-dist";
 import { getPaperPageTexts, savePaperPageText } from "../storage/paperFiles";
+import { layoutTextItems, type LayoutTextItem, type PageLayout } from "./layout";
+import { readableFigureText } from "./figureOcr";
 
 GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
@@ -89,6 +91,7 @@ export async function extractPdfText(blob: Blob, paperId: string, options: { max
 export interface CurrentPageText {
   text: string;
   source: "native" | "ocr" | "empty";
+  layout: PageLayout | null;
 }
 
 /**
@@ -97,12 +100,15 @@ export interface CurrentPageText {
  * 两者都没有时返回 `empty` —— 调用方据此引导用户先 OCR,而不是拿一段乱码去翻译。
  */
 export async function currentPageText(page: PDFPageProxy, paperId: string): Promise<CurrentPageText> {
-  const native = (await pageText(page)).trim();
-  if (native.length >= 40) return { text: native, source: "native" };
+  const content = await page.getTextContent();
+  const viewport = page.getViewport({ scale: 1 });
+  const layout = layoutTextItems(content.items.filter((item): item is LayoutTextItem & typeof item => "str" in item), viewport.width, viewport.height);
+  const native = layout.blocks.map((block) => block.text).join(" ").trim();
+  if (native.length >= 40) return { text: native, source: "native", layout };
   const storedOcr = await getPaperPageTexts(paperId);
   const ocr = (storedOcr[page.pageNumber] ?? "").trim();
-  if (ocr.length >= 40) return { text: ocr, source: "ocr" };
-  return { text: "", source: "empty" };
+  if (ocr.length >= 40) return { text: ocr, source: "ocr", layout: null };
+  return { text: "", source: "empty", layout: null };
 }
 
 export async function recognizePdfPage(page: PDFPageProxy, paperId: string, onProgress?: (progress: number) => void) {
@@ -125,6 +131,18 @@ export async function recognizePdfPage(page: PDFPageProxy, paperId: string, onPr
     if (!text) throw new Error("本页没有识别出文字");
     await savePaperPageText(paperId, page.pageNumber, text);
     return text;
+  } finally {
+    await worker.terminate();
+  }
+}
+
+/** OCR only the extracted figure image in the browser; no image is sent to the text-only translation model. */
+export async function recognizeFigureText(image: string): Promise<string> {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("eng");
+  try {
+    const result = await worker.recognize(image, {}, { tsv: true });
+    return readableFigureText(result.data.tsv);
   } finally {
     await worker.terminate();
   }

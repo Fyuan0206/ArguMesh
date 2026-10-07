@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
+import { UpdateNotice } from "./components/UpdateNotice";
 import { LibraryPage } from "./pages/LibraryPage";
 import { MatricesIndexPage } from "./pages/MatricesIndexPage";
 import { MatrixPage } from "./pages/MatrixPage";
@@ -53,6 +54,7 @@ function AppShell() {
       <section className={`workspace ${isMatrix ? "matrix-workspace" : isReader ? "reader-workspace" : "route-workspace"}`}>
         <Outlet />
       </section>
+      <UpdateNotice />
     </main>
   );
 }
