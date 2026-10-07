@@ -5,6 +5,7 @@ import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const digest = "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b";
+const url = "https://download.visualstudio.microsoft.com/download/pr/bd1c8d9d-ba95-4eee-bc6e-df1fcc876373/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe";
 const dlls = ["concrt140", "msvcp140", "msvcp140_1", "msvcp140_2", "msvcp140_atomic_wait", "msvcp140_codecvt_ids", "vcamp140", "vccorlib140", "vcomp140", "vcruntime140", "vcruntime140_1", "vcruntime140_threads"];
 
 export async function bundleVcRuntime(root, target, run) {
@@ -13,7 +14,7 @@ export async function bundleVcRuntime(root, target, run) {
   const archive = path.join(root, "build", "vc_redist.x64.exe");
   let bytes = await readFile(archive).catch(() => Buffer.alloc(0));
   if (createHash("sha256").update(bytes).digest("hex") !== digest) {
-    await run("curl.exe", ["--fail", "--location", "--retry", "3", "--max-time", "600", "--output", archive, "https://aka.ms/vs/17/release/vc_redist.x64.exe"]);
+    await run("curl.exe", ["--fail", "--location", "--retry", "3", "--max-time", "600", "--output", archive, url]);
     bytes = await readFile(archive);
   }
   if (createHash("sha256").update(bytes).digest("hex") !== digest) throw new Error("Microsoft runtime SHA-256 mismatch; review and pin a new official release before rebuilding");
