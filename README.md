@@ -1,35 +1,39 @@
-# ArguMesh (论脉)
-
 <p align="center">
   <img src="./public/argumesh-logo.svg" alt="ArguMesh 论脉 — Weave evidence into the thread of your research" width="420" />
 </p>
 
-> Weave evidence into the thread of your research.
+<h1 align="center">ArguMesh · 论脉</h1>
 
-**GitHub: [github.com/Fyuan0206/ArguMesh](https://github.com/Fyuan0206/ArguMesh)** · MIT License
+<p align="center"><strong>Weave evidence into the thread of your research.</strong></p>
 
-ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research workbench** for researchers, graduate students, and paper authors. It puts the research loop into one traceable workflow:
+<p align="center">
+  <strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a> · <a href="https://github.com/Fyuan0206/ArguMesh/releases">Releases</a> · <a href="./LICENSE">MIT</a>
+</p>
 
-```text
-Literature → Evidence Matrix → Research Thread → Experiments → Writing
-                              ↑                      ↓
-                              └── Research Agent ────┘
-```
+<p align="center">
+  <a href="#why-argumesh">Why ArguMesh</a> · <a href="#features">Features</a> · <a href="#screenshots">Screenshots</a> · <a href="#download">Download</a> · <a href="#documentation-map">Docs</a> · <a href="#community">Community</a>
+</p>
+
+
+ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research workbench** for researchers, graduate students, and paper authors. It connects literature, evidence, research questions, experiments and writing in one traceable workflow.
 
 Stop shuffling information between PDF readers, spreadsheets, note apps, and chat AI.
 
-- **Zero cloud dependencies** — all data lives in a local SQLite file; no sign-ups, no vendor lock-in
-- **Works out of the box** — `pnpm install && pnpm run db:seed && pnpm run dev`, no login required
-- **Or just download it** — a prebuilt Windows installer is attached to every [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases) (see [Download](#download))
-- **Ask an AI to deploy it** — paste the prompt in [Deploy with AI](#deploy-with-ai) into Cursor, Claude Code, Codex, or Copilot
-- **Single-user** — no accounts, no auth; a local workbench that runs on one machine
-- **AI is optional** — plug in any OpenAI-compatible endpoint; every manual workflow works without it
 
 > Note: the interface is currently in Chinese. 中文文档见 [README.zh-CN.md](./README.zh-CN.md)。
 
-## Acknowledgments
+<p align="center">Literature → Evidence Matrix → Research Thread → Experiments → Writing</p>
 
-Thanks to [StepFun (阶跃星辰)](https://www.stepfun.com/) for supporting ArguMesh with model API access during development and evaluation.
+- **Local SQLite** — zero cloud dependencies, no accounts or login.
+- **Optional AI** — bring your own model API; manual workflows work without it.
+- **You stay in control** — AI drafts keep sources; confirmed and locked evidence is protected.
+
+## 🤝 Acknowledgments
+
+<details open>
+<summary>Thanks to StepFun for model API support</summary>
+
+Thanks to [StepFun](https://www.stepfun.com/) for supporting development and evaluation.
 
 <p align="center">
   <a href="https://www.stepfun.com/">
@@ -37,18 +41,36 @@ Thanks to [StepFun (阶跃星辰)](https://www.stepfun.com/) for supporting Argu
   </a>
 </p>
 
+</details>
+
+## Why ArguMesh
+
+| Common problem | How ArguMesh handles it |
+| --- | --- |
+| Papers scattered across folders, browsers, and note apps | Projects scope topics and their literature; search, filters, and tags keep them organized; **`literature/` folder sync** imports PDFs from a bound workspace without manual upload |
+| Highlights and summaries never get reused | The reader saves selections as Note / Claim / Evidence with paper + page attached |
+| Uploading whole PDFs to AI makes answers unverifiable | Reader Q&A submits only your selected passage, its page, and your question; bilingual 对照 submits only the current page's passages, and only after you press 翻译本页 — never the whole document |
+| Manual spreadsheets make paper comparison inconsistent | The Evidence Matrix standardizes dimensions; every cell carries source, confidence, and verification state |
+| Notes, gaps, ideas, and questions live in separate tools | Research Thread unifies insights and research questions with provenance |
+| Experiments and writing are disconnected from evidence | Experiment analysis and LaTeX writing cite project evidence and can jump back into the workspace |
+| Batch AI work is opaque and hard to retrace | The task center and Research Agent record scope, model, actions, and results |
+
 ## Features
+
+| Stage | Capabilities |
+| --- | --- |
+| Literature | DOI / arXiv / PDF import, folder sync, reading and annotations |
+| Evidence | Paper Cards, evidence matrix, source tracing, confirmation and locking |
+| Research | Insights, research questions and a project-aware Research Agent |
+| Experiments & writing | Experiment plans, result analysis, LaTeX editing and Diff review |
+
+<details>
+<summary>Explore all features</summary>
 
 ### Project-first workspace + Research Agent
 Open the app and land on your project list. Inside a project, the sidebar follows the research stages: **AI Research Assistant → Literature → Evidence Matrix → Research Thread → Experiments → Writing**.
 
 The project home is a persistent **Research Agent** built on the [Pi](https://pi.dev/docs/latest/sdk) `AgentSession` substrate (`@earendil-works/pi-coding-agent`): multi-turn tool loops with bounded project context (papers, matrix, research thread, experiment results, paper sources). Domain whitelist tools can draft insights, link RQ evidence, design experiments, propose paper Diffs, compile LaTeX, and more — with clickable citations back into the workspace. Built-in coding tools (`bash` / `write` / `edit`) stay off; writes remain drafts only.
-
-<img src="./docs/screenshots/projects.png" alt="Project list — create, search, and enter research projects" width="900" />
-
-<img src="./docs/screenshots/project-home.png" alt="Project home — Research Agent and project overview" width="900" />
-
-<img src="./docs/screenshots/research-agent.png" alt="Research Agent — project-aware multi-turn AI with structured actions" width="900" />
 
 ### Literature library
 Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 核心文献), favorites, tags, and per-project notes. Select multiple papers in the list to **batch-delete** them (same permanent delete as the per-row action: removes PDF, evidence, and linked knowledge across projects after confirm).
@@ -70,8 +92,6 @@ The server reads PDFs from disk, deduplicates by file hash (SHA-256), writes met
 
 API: `POST /api/projects/:projectId/library/scan-inbox` (requires `workspacePath`).
 
-<img src="./docs/screenshots/library.png" alt="Literature library — papers, reading status, and Paper Card shortcuts" width="900" />
-
 ### PDF reader with structured annotations
 Built-in PDF reader with OCR. **Select any passage and a floating bubble appears right at the selection** with 翻译 / 高亮 / 笔记 / 证据 one tap away:
 
@@ -81,17 +101,11 @@ Built-in PDF reader with OCR. **Select any passage and a floating bubble appears
 
 Saving a selection as a Note, Claim, or Evidence keeps the paper reference and page number attached. Ask the AI about a passage: only the text you selected, its page number, and your question are sent to the model — never the whole document.
 
-<img src="./docs/screenshots/reader.png" alt="PDF reader — page view, selection, notes, and grounded Q&A" width="900" />
-
 ### AI Paper Card
 Generate a structured card for any paper: Problem, Method, Data, Findings, Limitations — each field with source excerpts, so every claim can be traced back to the paper.
 
-<img src="./docs/screenshots/paper-card.png" alt="Paper Card — structured problem, method, data, findings, and limitations" width="900" />
-
 ### Evidence Matrix
 Papers as columns × research dimensions as rows. AI extraction fills every cell with evidence, confidence, and source location (page + excerpt). Then you verify: mark a cell 原文一致 (matches the source), 需要修订 (needs revision), or 标记冲突 (conflict), and 确认并锁定 (confirm & lock) the ones you trust. Locked cells are never silently overwritten by batch AI runs. With many papers (e.g. 50+), the matrix uses **horizontal scroll** with fixed column widths and a sticky left dimension column — use the top search box to filter papers.
-
-<img src="./docs/screenshots/matrix.png" alt="Evidence Matrix — papers × dimensions, with source-linked verification" width="900" />
 
 ### Research Thread
 One page for the research spine, with two views:
@@ -101,14 +115,8 @@ One page for the research spine, with two views:
 
 Every AI draft keeps provenance (`source` / `model` / `generatedAt`). Confirmed content is never silently overwritten.
 
-<img src="./docs/screenshots/research-questions.png" alt="Research Thread — research questions linked to papers and evidence" width="900" />
-
-<img src="./docs/screenshots/research-gaps.png" alt="Research Thread — insights pool for findings, contradictions, gaps, and concepts" width="900" />
-
 ### Experiments
 Design main experiments and ablations with AI assistance, import CSV / JSON / pasted results, and run evidence-cited analysis. ArguMesh does **not** execute experiments for you — it helps you plan, import, and interpret. Each analysis can append a conclusion draft back onto the linked research question.
-
-<img src="./docs/screenshots/experiments.png" alt="Experiments — design, import results, and evidence-cited analysis" width="900" />
 
 ### Paper writing (LaTeX)
 Bind a local workspace folder to the project, edit `main.tex` / `references.bib`, keep snapshots, review AI Diff proposals before accepting, and optionally compile with Tectonic or latexmk for a real PDF preview. Dangerous shell commands are blocked; accepting a body Diff can trigger compile, and compile problems can generate a fix Diff.
@@ -118,52 +126,22 @@ The same `workspacePath` also hosts the optional **`literature/` PDF inbox** (se
 ### Global search & task center
 Search across projects from one box. Every long AI job shows scope, model, progress, and result — and can be cancelled.
 
-<img src="./docs/screenshots/search.png" alt="Global search across projects and literature" width="900" />
-
-<img src="./docs/screenshots/tasks.png" alt="Task center — AI job scope, progress, status, and results" width="900" />
-
 ### Bring your own AI
 Configure a single OpenAI-compatible endpoint in Settings — Base URL (default `https://api.openai.com/v1`), API Key, and model name. If the Base URL ends with `/anthropic`, the Anthropic Messages API is used automatically. Keys are stored server-side and never returned to the browser. With no AI configured, every manual workflow still works; AI features return a clear "AI not configured" notice.
 
-<img src="./docs/screenshots/settings.png" alt="Settings — model provider and local data controls" width="900" />
+</details>
 
-## Why ArguMesh
+## Screenshots
 
-| Common problem | How ArguMesh handles it |
-| --- | --- |
-| Papers scattered across folders, browsers, and note apps | Projects scope topics and their literature; search, filters, and tags keep them organized; **`literature/` folder sync** imports PDFs from a bound workspace without manual upload |
-| Highlights and summaries never get reused | The reader saves selections as Note / Claim / Evidence with paper + page attached |
-| Uploading whole PDFs to AI makes answers unverifiable | Reader Q&A submits only your selected passage, its page, and your question; bilingual 对照 submits only the current page's passages, and only after you press 翻译本页 — never the whole document |
-| Manual spreadsheets make paper comparison inconsistent | The Evidence Matrix standardizes dimensions; every cell carries source, confidence, and verification state |
-| Notes, gaps, ideas, and questions live in separate tools | Research Thread unifies insights and research questions with provenance |
-| Experiments and writing are disconnected from evidence | Experiment analysis and LaTeX writing cite project evidence and can jump back into the workspace |
-| Batch AI work is opaque and hard to retrace | The task center and Research Agent record scope, model, actions, and results |
+| Research Agent | PDF reader | Evidence matrix |
+| --- | --- | --- |
+| <img src="./docs/screenshots/project-home.png" alt="Research Agent" width="300" /> | <img src="./docs/screenshots/reader.png" alt="PDF reader" width="300" /> | <img src="./docs/screenshots/matrix.png" alt="Evidence matrix" width="300" /> |
 
-## Deploy with AI
+| Research thread | Experiments | Paper Card |
+| --- | --- | --- |
+| <img src="./docs/screenshots/research-questions.png" alt="Research thread" width="300" /> | <img src="./docs/screenshots/experiments.png" alt="Experiments" width="300" /> | <img src="./docs/screenshots/paper-card.png" alt="Paper Card" width="300" /> |
 
-If you use [Cursor](https://cursor.com), [Claude Code](https://claude.com/claude-code), Codex, Copilot, or another coding agent that can run commands in this repo, paste the prompt below and let it install, seed, and start ArguMesh. The agent should also read [`CLAUDE.md`](./CLAUDE.md) — that file is the project runbook for coding agents.
-
-```
-Deploy ArguMesh (论脉) locally from this repository.
-
-This is a local-first Node.js + SQLite app. Do not add Cloudflare Workers, wrangler, or Turso.
-
-1. Prerequisites: Node.js ≥ 20. If pnpm is missing, run `corepack enable`.
-2. Read CLAUDE.md, README.md, and .env.example in the repo root.
-3. From the repo root, run `pnpm install`.
-4. `.env` is optional. Do not invent or commit API keys. Copy `.env.example` to `.env` only if the user wants to set DATABASE_URL or AI providers.
-5. Run `pnpm run db:seed` (idempotent: creates tables + a demo project; no accounts).
-6. Start the app:
-   - Development (default): `pnpm run dev` → frontend http://localhost:5173 , API 127.0.0.1:8787
-   - Single-port production-style: `pnpm run build` then `pnpm start` → http://127.0.0.1:8787
-7. Tell the user to open the URL and start working (no login required).
-
-On Windows PowerShell 5.x, chain commands with `;` not `&&`.
-Do not expose the server to the public internet unless the user explicitly asks — there is no authentication, so any network access is unrestricted.
-Do not start extra services. Confirm the app is up by hitting GET /api/health.
-```
-
-Manual steps for humans are in [Deployment](#deployment) below.
+Click an image to view it at full size.
 
 ## Download
 
@@ -226,6 +204,37 @@ All configuration is optional — see `.env.example`:
 > ⚠️ By default ArguMesh listens on localhost only with **no authentication**. Do not expose the API port to untrusted networks. For a public deployment, restrict network access and put HTTPS in front (e.g. Caddy / Nginx).
 
 Optional: install [Tectonic](https://tectonic-typesetting.github.io/) or `latexmk` on the machine if you want in-app LaTeX compile + PDF preview.
+
+<details>
+<summary>Deploy with a coding agent (expand prompt)</summary>
+
+## Deploy with AI
+
+If you use [Cursor](https://cursor.com), [Claude Code](https://claude.com/claude-code), Codex, Copilot, or another coding agent that can run commands in this repo, paste the prompt below and let it install, seed, and start ArguMesh. The agent should also read [`CLAUDE.md`](./CLAUDE.md) — that file is the project runbook for coding agents.
+
+```
+Deploy ArguMesh (论脉) locally from this repository.
+
+This is a local-first Node.js + SQLite app. Do not add Cloudflare Workers, wrangler, or Turso.
+
+1. Prerequisites: Node.js ≥ 20. If pnpm is missing, run `corepack enable`.
+2. Read CLAUDE.md, README.md, and .env.example in the repo root.
+3. From the repo root, run `pnpm install`.
+4. `.env` is optional. Do not invent or commit API keys. Copy `.env.example` to `.env` only if the user wants to set DATABASE_URL or AI providers.
+5. Run `pnpm run db:seed` (idempotent: creates tables + a demo project; no accounts).
+6. Start the app:
+   - Development (default): `pnpm run dev` → frontend http://localhost:5173 , API 127.0.0.1:8787
+   - Single-port production-style: `pnpm run build` then `pnpm start` → http://127.0.0.1:8787
+7. Tell the user to open the URL and start working (no login required).
+
+On Windows PowerShell 5.x, chain commands with `;` not `&&`.
+Do not expose the server to the public internet unless the user explicitly asks — there is no authentication, so any network access is unrestricted.
+Do not start extra services. Confirm the app is up by hitting GET /api/health.
+```
+
+Manual steps for humans are in [Deployment](#deployment) below.
+
+</details>
 
 ## Changelog
 
@@ -307,10 +316,10 @@ API tests call the Hono app directly with a fresh temporary SQLite database per 
 Join the WeChat group **ArguMesh | AI学术工具** to discuss the product, report issues, and share research workflows. Scan with WeChat:
 
 <p align="center">
-  <img src="./docs/wechat-group.jpg" alt="WeChat group QR — ArguMesh | AI学术工具" width="280" />
+  <img src="./docs/wechat-group.png" alt="WeChat group QR — ArguMesh | AI学术工具" width="280" />
 </p>
 
-> WeChat group QR codes expire periodically. If the code above no longer works, open an issue or check the latest README update.
+> Updated October 7, 2026. WeChat indicates this QR code is valid before October 14, 2026. If it expires, open an issue or check the latest README update.
 
 ## Reference projects
 

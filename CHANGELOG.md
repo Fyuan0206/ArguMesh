@@ -8,6 +8,16 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 
 ---
 
+## Docs (2026-10-07) — README presentation refresh
+
+- Refreshed both READMEs with a compact centered introduction, prominent acknowledgments, capability tables and a three-column screenshot gallery. Detailed feature descriptions remain expandable.
+- 参考 jev-chat README 的组织方式，同步更新中英文页首、靠前的致谢区、功能表格与三列截图；完整功能说明可展开。
+
+## Docs (2026-10-07) — WeChat group QR code
+
+- Replaced the community QR code with the supplied PNG and updated both READMEs with its validity window (before October 14, 2026).
+- 更新微信群二维码，保留用户提供的 PNG 原图；中英文 README 同步注明有效期（2026 年 10 月 14 日前）。
+
 ## Docs (2026-09-24) — README download & install section
 
 - **Both READMEs gained a Download / 下载安装 section** linking the v3.2.5 Windows installer from [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5), with a short entry in each top feature list. The section repeats the three installer facts the release notes carry — **the installer ships an empty database** (re-enter your AI provider on the Settings page), **the build is unsigned** (SmartScreen will warn), **the app has no auth** (never expose its port) — plus install steps (`currentUser`, no administrator rights), first-launch latency (8–75 s against a 90 s budget), where data lives (`%LOCALAPPDATA%\ArguMesh\data`, written on first launch only so upgrades never touch it), and the `sidecar.log` troubleshooting entry.

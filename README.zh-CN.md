@@ -1,33 +1,36 @@
-# ArguMesh(论脉)
-
 <p align="center">
   <img src="./public/argumesh-logo.svg" alt="ArguMesh 论脉——把证据连成研究脉络" width="420" />
 </p>
 
-> 把证据连成研究脉络。
+<h1 align="center">ArguMesh · 论脉</h1>
 
-**GitHub：[github.com/Fyuan0206/ArguMesh](https://github.com/Fyuan0206/ArguMesh)** · MIT License
+<p align="center"><strong>把证据连成研究脉络。</strong></p>
 
-ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究工作台,面向科研人员、研究生和论文作者。它把研究闭环收进同一条可追溯链路:
+<p align="center">
+  <a href="./README.md">English</a> · <strong>简体中文</strong> · <a href="https://github.com/Fyuan0206/ArguMesh/releases">Releases</a> · <a href="./LICENSE">MIT</a>
+</p>
 
-```text
-文献 → 证据矩阵 → 研究脉络 → 实验 → 论文写作
-                ↑              ↓
-                └── Research Agent ──┘
-```
+<p align="center">
+  <a href="#解决的问题">为什么选择论脉</a> · <a href="#功能特性">功能特性</a> · <a href="#界面预览">界面预览</a> · <a href="#下载安装">下载安装</a> · <a href="#文档索引">开发文档</a> · <a href="#交流群">交流群</a>
+</p>
+
+
+ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究工作台,面向科研人员、研究生和论文作者。从文献到论文写作，让每一步都有证据可追溯。
 
 减少在 PDF 阅读器、表格、笔记软件和聊天式 AI 之间反复搬运信息。
 
-- **零云依赖**:数据全部保存在本地 SQLite 文件,不需要注册任何云服务
-- **开箱即用**:`pnpm install && pnpm run db:seed && pnpm run dev` 即可启动,无需登录
-- **也可以直接下载**:每个 [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases) 都附带预构建的 Windows 安装包(见[下载安装](#下载安装))
-- **可让 AI 代为部署**:把 [让 AI 部署](#让-ai-部署) 中的提示词发给 Cursor / Claude Code / Codex / Copilot 等编程助手即可
-- **单用户**:无需登录、无需账号;一台机器上即可运行的本地优先工作台
-- **AI 可选**:接入任意 OpenAI 兼容 API(OpenAI / DeepSeek / StepFun / 本地模型等),不配置也能使用全部人工流程
+<p align="center">文献 → 证据矩阵 → 研究脉络 → 实验 → 论文写作</p>
 
-## 项目致谢
+- **本地 SQLite**：零云依赖，无需账号或登录。
+- **AI 可选**：自带模型 API，不配置也能使用人工流程。
+- **内容由你确认**：AI 建议保留来源，确认与锁定后的证据受到保护。
 
-感谢 [阶跃星辰（StepFun）](https://www.stepfun.com/) 在 ArguMesh 开发与评测期间提供模型 API 支持。
+## 🤝 项目致谢
+
+<details open>
+<summary>感谢阶跃星辰提供模型 API 支持</summary>
+
+感谢 [阶跃星辰（StepFun）](https://www.stepfun.com/) 在开发与评测期间提供支持。
 
 <p align="center">
   <a href="https://www.stepfun.com/">
@@ -35,18 +38,36 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
   </a>
 </p>
 
+</details>
+
+## 解决的问题
+
+| 常见问题 | ArguMesh 的处理方式 |
+| --- | --- |
+| 论文分散在文件夹、浏览器和笔记软件中,难以按课题管理 | 用 Project 隔离课题与文献,支持搜索、筛选与标签;绑定工作区后 **`literature/` 文件夹同步** 可免上传批量导入 PDF |
+| 阅读论文容易停留在划线和摘要,后续无法复用 | 在 PDF 阅读器中把选区保存为 Note、Claim 或 Evidence,保留论文与页码 |
+| 直接向 AI 上传整篇论文,答案范围不透明 | 阅读问答只提交用户主动选择的原文、页码和问题;双语对照只提交当前页的分段,且必须点过「翻译本页」才会发出,绝不整篇上传 |
+| 多篇论文靠手工表格横向比较,维度不统一、证据出处易丢失 | 证据矩阵以论文为列、研究维度为行,证据可核验、确认、锁定或标记冲突 |
+| 笔记、缺口、构想和研究问题散落在多个工具里 | 研究脉络统一洞见与研究问题,并保留溯源 |
+| 实验与写作和证据脱节 | 实验结果分析与 LaTeX 写作引用项目证据,并可跳回工作区对象 |
+| AI 批处理过程不可见,失败后难以追踪 | 任务中心与 Research Agent 记录范围、模型、动作与结果 |
+
 ## 功能特性
+
+| 环节 | 能力 |
+| --- | --- |
+| 文献 | DOI / arXiv / PDF 导入、文件夹同步、阅读与批注 |
+| 证据 | Paper Card、证据矩阵、来源追溯、确认与锁定 |
+| 研究 | 洞见与研究问题、项目上下文 Research Agent |
+| 实验与写作 | 实验设计、结果分析、LaTeX 编辑与 Diff 审阅 |
+
+<details>
+<summary>展开完整功能说明</summary>
 
 ### 项目优先的工作区 + Research Agent
 打开后进入项目列表。进入项目后,侧栏按研究阶段组织:**AI 研究助手 → 文献 → 证据矩阵 → 研究脉络 → 实验 → 论文写作**。
 
 项目首页是可持续对话的 **Research Agent**，底层为 [Pi](https://pi.dev/docs/latest/sdk) `AgentSession`（`@earendil-works/pi-coding-agent`）：多步工具循环，装配有界项目上下文（文献、证据矩阵、研究脉络、实验结果、论文源文件）。领域白名单工具可创建洞见草稿、关联 RQ 证据、设计实验、提出论文 Diff、安全编译 LaTeX 等，并给出可跳转回工作区的引用。内置编程工具（bash / write / edit）关闭；写入只产生草稿。
-
-<img src="./docs/screenshots/projects.png" alt="项目列表：新建、搜索并进入研究项目" width="900" />
-
-<img src="./docs/screenshots/project-home.png" alt="项目首页：Research Agent 与项目概览" width="900" />
-
-<img src="./docs/screenshots/research-agent.png" alt="Research Agent：带项目上下文的多轮对话与结构化动作" width="900" />
 
 ### 文献库
 按 DOI / arXiv / URL 导入文献(自动获取元数据),或批量上传 PDF(单文件 ≤ 25 MB)。支持阅读状态(待读 → 粗读 → 精读 → 核心文献)、收藏、标签与项目内笔记。列表可多选后**批量删除**(与单行删除相同:确认后永久移除 PDF、证据与关联知识,跨项目一并清理)。
@@ -68,8 +89,6 @@ ArguMesh(中文名「论脉」)是一个**本地优先、开源**的文献研究
 
 API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePath`)。
 
-<img src="./docs/screenshots/library.png" alt="文献库：论文列表、阅读状态与 Paper Card 入口" width="900" />
-
 ### PDF 阅读器:结构化标注
 内置阅读器(pdf.js + OCR)。**选中原文任意片段,选区旁即浮出气泡**,翻译 / 高亮 / 笔记 / 证据一步到位:
 
@@ -79,17 +98,11 @@ API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePa
 
 保存选区为 Note、Claim 或 Evidence 时,论文与页码随之保留;阅读问答只提交你主动选中的原文、页码和问题,绝不整篇上传。
 
-<img src="./docs/screenshots/reader.png" alt="PDF 阅读器：原文、选区标注与基于选区的问答" width="900" />
-
 ### AI Paper Card
 为每篇论文生成结构化卡片:问题 / 方法 / 数据 / 发现 / 局限,每个字段附原文出处摘录,可回溯核对。
 
-<img src="./docs/screenshots/paper-card.png" alt="Paper Card：研究问题、方法、数据与发现的结构化卡片" width="900" />
-
 ### 证据矩阵(核心)
 论文为列 × 研究维度为行。AI 提取逐格填入证据、置信度与来源位置(页码 + 摘录);然后人工核验:标记「原文一致」「需要修订」或「标记冲突」,可信的格子「确认并锁定」。锁定的格子不会被批量 AI 运行静默覆盖。文献较多(如 50 篇以上)时,矩阵以**横向滚动**展示,左侧研究维度列固定,列宽按篇数自动收窄;可用顶栏搜索框筛选论文。
-
-<img src="./docs/screenshots/matrix.png" alt="证据矩阵：论文 × 研究维度，单元格可回溯到原文" width="900" />
 
 ### 研究脉络
 一个页面承载研究脊柱,含两个子视图:
@@ -99,14 +112,8 @@ API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePa
 
 每条 AI 草稿保留溯源(`source` / `model` / `generatedAt`);已确认内容不会被静默覆盖。
 
-<img src="./docs/screenshots/research-questions.png" alt="研究脉络：研究问题与证据关联" width="900" />
-
-<img src="./docs/screenshots/research-gaps.png" alt="研究脉络：洞见池（发现、矛盾、缺口、构想）" width="900" />
-
 ### 实验工作台
 用 AI 辅助设计主实验与消融实验,导入 CSV / JSON / 粘贴结果,并做带证据引用的结果分析。ArguMesh **不会替你跑实验**——它负责规划、导入与解读。每次分析可将结论草稿 append-only 回挂到对应研究问题。
-
-<img src="./docs/screenshots/experiments.png" alt="实验工作台：设计、导入结果与带证据的分析" width="900" />
 
 ### 论文写作(LaTeX)
 为项目绑定本地工作文件夹,编辑 `main.tex` / `references.bib`,保留快照,接受前先审阅 AI Diff;可选调用本机 Tectonic 或 latexmk 编译并预览真实 PDF。危险命令会被拦截;接受正文 Diff 后可自动编译,编译问题可再生成修复 Diff。
@@ -116,52 +123,22 @@ API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePa
 ### 全局搜索与任务中心
 一个搜索框覆盖全部项目与文献。每个长耗时 AI 任务展示范围、模型、进度与结果,可取消。
 
-<img src="./docs/screenshots/search.png" alt="全局搜索" width="900" />
-
-<img src="./docs/screenshots/tasks.png" alt="任务中心：范围、进度、状态与结果" width="900" />
-
 ### 自带 AI 配置
 在「设置」页配置 OpenAI 兼容接口——Base URL(默认 `https://api.openai.com/v1`)、API Key、模型名称。Base URL 以 `/anthropic` 结尾时自动走 Anthropic Messages API。密钥只存服务端,永不回传浏览器。未配置 AI 时全部人工流程照常可用,AI 功能返回指向设置页的「AI 未配置」提示。
 
-<img src="./docs/screenshots/settings.png" alt="设置：模型服务与本地数据管理" width="900" />
+</details>
 
-## 解决的问题
+## 界面预览
 
-| 常见问题 | ArguMesh 的处理方式 |
-| --- | --- |
-| 论文分散在文件夹、浏览器和笔记软件中,难以按课题管理 | 用 Project 隔离课题与文献,支持搜索、筛选与标签;绑定工作区后 **`literature/` 文件夹同步** 可免上传批量导入 PDF |
-| 阅读论文容易停留在划线和摘要,后续无法复用 | 在 PDF 阅读器中把选区保存为 Note、Claim 或 Evidence,保留论文与页码 |
-| 直接向 AI 上传整篇论文,答案范围不透明 | 阅读问答只提交用户主动选择的原文、页码和问题;双语对照只提交当前页的分段,且必须点过「翻译本页」才会发出,绝不整篇上传 |
-| 多篇论文靠手工表格横向比较,维度不统一、证据出处易丢失 | 证据矩阵以论文为列、研究维度为行,证据可核验、确认、锁定或标记冲突 |
-| 笔记、缺口、构想和研究问题散落在多个工具里 | 研究脉络统一洞见与研究问题,并保留溯源 |
-| 实验与写作和证据脱节 | 实验结果分析与 LaTeX 写作引用项目证据,并可跳回工作区对象 |
-| AI 批处理过程不可见,失败后难以追踪 | 任务中心与 Research Agent 记录范围、模型、动作与结果 |
+| 研究助手 | 文献阅读 | 证据矩阵 |
+| --- | --- | --- |
+| <img src="./docs/screenshots/project-home.png" alt="研究助手" width="300" /> | <img src="./docs/screenshots/reader.png" alt="文献阅读" width="300" /> | <img src="./docs/screenshots/matrix.png" alt="证据矩阵" width="300" /> |
 
-## 让 AI 部署
+| 研究脉络 | 实验工作台 | 论文卡片 |
+| --- | --- | --- |
+| <img src="./docs/screenshots/research-questions.png" alt="研究脉络" width="300" /> | <img src="./docs/screenshots/experiments.png" alt="实验工作台" width="300" /> | <img src="./docs/screenshots/paper-card.png" alt="论文卡片" width="300" /> |
 
-如果你在用 [Cursor](https://cursor.com)、[Claude Code](https://claude.com/claude-code)、Codex、Copilot、Trae 等能在本仓库里执行命令的编程助手,把下面这段提示词原样发给它,让它完成安装、初始化数据库并启动。助手还应阅读 [`CLAUDE.md`](./CLAUDE.md)——那是给 coding agent 的项目手册。
-
-```
-请在本仓库本地部署 ArguMesh(论脉)。
-
-这是一个本地优先的 Node.js + SQLite 应用。不要引入 Cloudflare Workers、wrangler 或 Turso。
-
-1. 前置条件:Node.js ≥ 20。若没有 pnpm,先执行 `corepack enable`。
-2. 阅读仓库根目录的 CLAUDE.md、README.zh-CN.md(或 README.md)和 .env.example。
-3. 在仓库根目录执行 `pnpm install`。
-4. `.env` 可选。不要编造或提交 API Key。仅当用户要自定义 DATABASE_URL 或 AI 服务时,才从 `.env.example` 复制为 `.env`。
-5. 执行 `pnpm run db:seed`(可重复运行:建表 + 演示项目,无账号)。
-6. 启动:
-   - 开发模式(默认):`pnpm run dev` → 前端 http://localhost:5173 ,API 127.0.0.1:8787
-   - 单端口生产模式:`pnpm run build` 然后 `pnpm start` → http://127.0.0.1:8787
-7. 告诉用户打开上述地址即可开始使用(无需登录)。
-
-若当前是 Windows PowerShell 5.x,命令之间用 `;` 连接,不要用 `&&`。
-除非用户明确要求公网部署,否则不要把服务暴露到公网。**本版本无任何鉴权**,任何能访问该端口的人都能读写全部数据;若要公网部署,务必用反向代理(Caddy / Nginx)提供 HTTPS 并限制网络访问。
-不要额外启动其他服务。用 GET /api/health 确认服务已起来。
-```
-
-人工逐步安装见下方 [部署](#部署)。
+点击图片可查看大图。
 
 ## 下载安装
 
@@ -240,6 +217,37 @@ AI_PROVIDERS=[{"id":"stepfun","label":"StepFun","baseUrl":"https://api.stepfun.c
 ```
 
 不配置 AI 时,全部人工流程(文献管理、阅读笔记、证据矩阵人工核验、研究脉络整理、实验导入与解读、论文编辑)完全可用。
+
+<details>
+<summary>使用编程助手部署（展开提示词）</summary>
+
+## 让 AI 部署
+
+如果你在用 [Cursor](https://cursor.com)、[Claude Code](https://claude.com/claude-code)、Codex、Copilot、Trae 等能在本仓库里执行命令的编程助手,把下面这段提示词原样发给它,让它完成安装、初始化数据库并启动。助手还应阅读 [`CLAUDE.md`](./CLAUDE.md)——那是给 coding agent 的项目手册。
+
+```
+请在本仓库本地部署 ArguMesh(论脉)。
+
+这是一个本地优先的 Node.js + SQLite 应用。不要引入 Cloudflare Workers、wrangler 或 Turso。
+
+1. 前置条件:Node.js ≥ 20。若没有 pnpm,先执行 `corepack enable`。
+2. 阅读仓库根目录的 CLAUDE.md、README.zh-CN.md(或 README.md)和 .env.example。
+3. 在仓库根目录执行 `pnpm install`。
+4. `.env` 可选。不要编造或提交 API Key。仅当用户要自定义 DATABASE_URL 或 AI 服务时,才从 `.env.example` 复制为 `.env`。
+5. 执行 `pnpm run db:seed`(可重复运行:建表 + 演示项目,无账号)。
+6. 启动:
+   - 开发模式(默认):`pnpm run dev` → 前端 http://localhost:5173 ,API 127.0.0.1:8787
+   - 单端口生产模式:`pnpm run build` 然后 `pnpm start` → http://127.0.0.1:8787
+7. 告诉用户打开上述地址即可开始使用(无需登录)。
+
+若当前是 Windows PowerShell 5.x,命令之间用 `;` 连接,不要用 `&&`。
+除非用户明确要求公网部署,否则不要把服务暴露到公网。**本版本无任何鉴权**,任何能访问该端口的人都能读写全部数据;若要公网部署,务必用反向代理(Caddy / Nginx)提供 HTTPS 并限制网络访问。
+不要额外启动其他服务。用 GET /api/health 确认服务已起来。
+```
+
+人工逐步安装见下方 [部署](#部署)。
+
+</details>
 
 ## 更新记录
 
@@ -321,10 +329,10 @@ API 测试直连 Hono 应用并为每个测试文件创建独立的临时 SQLite
 欢迎加入微信群 **ArguMesh | AI学术工具**,讨论产品使用、提需求 / 报 bug、交流研究工作流。请用微信扫码加入:
 
 <p align="center">
-  <img src="./docs/wechat-group.jpg" alt="微信交流群二维码 — ArguMesh | AI学术工具" width="280" />
+  <img src="./docs/wechat-group.png" alt="微信交流群二维码 — ArguMesh | AI学术工具" width="280" />
 </p>
 
-> 微信群二维码会定期失效。若上方二维码过期,请开 Issue 或查看 README 的最新更新。
+> 二维码更新于 2026 年 10 月 7 日，按微信提示于 10 月 14 日前有效。若二维码过期，请开 Issue 或查看 README 的最新更新。
 
 ## 参考项目
 
