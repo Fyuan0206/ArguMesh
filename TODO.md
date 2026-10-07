@@ -8,7 +8,7 @@ ArguMesh 的当前进度、明确**不要开工**的项、已知欠账，以及 
 
 ## 当前状态
 
-- **版本**：`3.3.0`（`package.json`）
+- **源码版本**：`3.3.1`（`package.json`，安装包尚未发布）；当前正式版为 [`v3.3.0`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0)
 - **已发布能力**：项目工作区、文献库（含 `literature/` 文件夹同步）、PDF 阅读器（OCR / 划词气泡 / 页内高亮 / 双语对照）、AI Paper Card、证据矩阵、研究脉络（洞见 + 研究问题）、实验工作台、LaTeX 写作、常驻 Research Agent（Pi `AgentSession`）、全局搜索、任务中心。
 - **阶段计划**：`ARGUMESH-RESEARCH-WORKBENCH-PLAN.md` 的第 0 节记录了 2026-08-26 的实施状态，其中列出的导航收敛、研究脉络、实验工作台、Research Agent、LaTeX 写作均已完成。
 - **分发**：`v3.2.5` 已发布到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)，附带 Windows NSIS 安装包 `ArguMesh_3.2.5_x64-setup.exe`（2026-09-24，用户重新提出后手动发布）。安装包**未签名**、**不带数据库和 AI 配置**，这三条事实同时写在 release notes、`README` / `README.zh-CN.md` 的「下载安装」章节与 `CHANGELOG.md` 里。后续版本的发布是手工三步：提交 → 打 tag → `gh release create` 附带新构建的安装包。

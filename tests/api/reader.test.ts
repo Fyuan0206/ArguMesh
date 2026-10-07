@@ -20,6 +20,18 @@ const askBody = {
   question: "这段话的核心观点是什么?",
 };
 
+describe("GET /api/reader/parse-page/status", () => {
+  it("rejects invalid pages without starting a parser or model download", async () => {
+    const response = await app.request("http://localhost/api/reader/parse-page/status?paperId=reader-paper&page=0", {}, ctx.bindings);
+    expect(response.status).toBe(400);
+  });
+  it("returns a missing-file response without starting a parser", async () => {
+    const response = await app.request("http://localhost/api/reader/parse-page/status?paperId=missing-paper&page=1", {}, ctx.bindings);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: "FILE_NOT_FOUND" });
+  });
+});
+
 describe("POST /api/reader/ask (no AI configured)", () => {
   it("returns 400 with a clear message when AI is not configured", async () => {
     const response = await app.request(

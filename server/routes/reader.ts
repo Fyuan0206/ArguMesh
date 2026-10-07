@@ -6,7 +6,7 @@ import { createStepFunCompletion } from "../services/stepfun";
 import { createDatabase } from "../db/client";
 import { paperFiles } from "../db/schema";
 import { eq } from "drizzle-orm";
-import { cancelPaperPageParsing, getCachedPaperPage, parsePaperPageLocally } from "../services/mineru";
+import { cancelPaperPageParsing, getCachedPaperPage, getPaperPageParseProgress, parsePaperPageLocally } from "../services/mineru";
 
 const requestSchema = z.object({
   paper: z.object({
@@ -48,6 +48,14 @@ readerRoutes.get("/reader/parse-page", async (c) => {
     const message = error instanceof Error ? error.message : "本地解析失败";
     return c.json({ error: "PARSE_FAILED", message }, 503);
   }
+});
+
+readerRoutes.get("/reader/parse-page/status", async (c) => {
+  const parsed = parsePageSchema.safeParse(c.req.query());
+  if (!parsed.success) return c.json({ error: "INVALID_PAGE", message: "请选择有效的论文和页码" }, 400);
+  const file = await createDatabase(c.env).select().from(paperFiles).where(eq(paperFiles.paperId, parsed.data.paperId)).get();
+  if (!file) return c.json({ error: "FILE_NOT_FOUND", message: "本机数据库中没有这篇论文的 PDF" }, 404);
+  return c.json({ progress: getPaperPageParseProgress(new Uint8Array(file.data), parsed.data.page) });
 });
 
 readerRoutes.delete("/reader/parse-page", async (c) => {

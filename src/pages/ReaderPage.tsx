@@ -1,8 +1,9 @@
+import type { ParserProgress } from "../../server/services/mineru-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ArrowsClockwise, BookOpenText, BookmarkSimple, Check, FilePdf, ListBullets, MagnifyingGlass, Minus, NotePencil, Plus, Quotes, Scan, Sparkle, Trash, Translate, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
 import { getDocument, type PDFDocumentProxy, type PDFPageProxy } from "pdfjs-dist";
-import { askReader, cancelReaderPageParse, downloadPaperFile, getAiConfig, getAiModels, parseReaderPage, syncPaper, syncProject, translateSelection, uploadPaperFile } from "../api";
+import { askReader, cancelReaderPageParse, downloadPaperFile, getAiConfig, getAiModels, getReaderPageParseStatus, parseReaderPage, syncPaper, syncProject, translateSelection, uploadPaperFile } from "../api";
 import type { ParsedPage } from "../../server/services/mineru";
 import { PdfPage, type PdfHighlight, type SelectionPayload } from "../components/PdfPage";
 import { EmptyState, LoadingState } from "../components/states";
@@ -161,6 +162,24 @@ export function ReaderPage() {
   const [compareColumns, setCompareColumns] = useState<1 | 2>(1);
   const [compareParser, setCompareParser] = useState<"layout" | "mineru">("layout");
   const [documentJob, setDocumentJob] = useState<DocumentTranslationJob | null>(null);
+  const [parserProgress, setParserProgress] = useState<ParserProgress | null>(null);
+  const parsingPage = documentJob?.stage === "parsing" ? documentJob.page : null;
+  useEffect(() => {
+    setParserProgress(null);
+    if (parsingPage === null) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const status = await getReaderPageParseStatus(paperId, parsingPage, controller.signal);
+        if (!controller.signal.aborted) setParserProgress(status.progress);
+      } catch { /* A failed status poll must not interrupt the running parse. */ }
+      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 1500);
+    };
+    void poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [paperId, parsingPage]);
+
   const documentRunRef = useRef<AbortController | null>(null);
   const documentParsingPageRef = useRef<number | null>(null);
   const pageNumberRef = useRef(pageNumber);
@@ -863,8 +882,9 @@ export function ReaderPage() {
                 ? <button type="button" className="secondary-button" disabled><X />正在取消…</button>
                 : <button type="button" className="primary" disabled={!document || comparePhase === "working" || documentJob?.stage === "done"} onClick={() => void translateWholeDocument()}><Translate />{documentJob?.stage === "done" ? "全文已翻译" : documentJob?.stage === "error" || documentJob?.stage === "cancelled" ? "继续翻译全文" : "精确解析并翻译全文"}</button>}
             <span className="compare-progress" role="status" aria-live="polite">{documentJob
-              ? `全文 ${documentJob.totalPages} 页 · 已完成 ${documentJob.completedPages} 页 · ${documentJob.stage === "parsing" ? `正在解析第 ${documentJob.page} 页` : documentJob.stage === "translating" ? `正在翻译第 ${documentJob.page} 页 ${documentJob.completedBlocks}/${documentJob.totalBlocks} 项` : documentJob.stage === "done" ? "全部完成" : documentJob.stage === "cancelling" ? "正在取消" : documentJob.stage === "cancelled" ? "已取消" : "已暂停"} · 模型 ${documentJob.model}`
+              ? `全文 ${documentJob.totalPages} 页 · 已完成 ${documentJob.completedPages} 页 · ${documentJob.stage === "parsing" ? `${parserProgress?.stage === "downloading" ? `首次准备：下载解析模型 ${parserProgress.completed}/${parserProgress.total} 组` : parserProgress?.stage === "starting" ? "正在检查本机解析模型…" : parserProgress?.stage === "queued" ? "等待本机解析任务…" : `正在解析第 ${documentJob.page} 页`}` : documentJob.stage === "translating" ? `正在翻译第 ${documentJob.page} 页 ${documentJob.completedBlocks}/${documentJob.totalBlocks} 项` : documentJob.stage === "done" ? "全部完成" : documentJob.stage === "cancelling" ? "正在取消" : documentJob.stage === "cancelled" ? "已取消" : "已暂停"} · 模型 ${documentJob.model}`
               : `当前第 ${pageNumber} / ${document?.numPages ?? 0} 页 · 已完成 ${compareDone} / ${compareTotal} 项`}</span>
+            {!documentJob ? <small className="compare-progress">首次使用需联网下载解析模型，之后在本机复用。</small> : null}
             {documentJob?.error || compareError || error ? <span className="compare-error-text">{documentJob?.error || compareError || error}</span> : null}
             <button type="button" className="secondary-button compare-notes-button" onClick={() => setReaderTab("notes")}><NotePencil />批注与问答</button>
           </div>

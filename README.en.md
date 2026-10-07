@@ -73,7 +73,7 @@ Open the app and land on your project list. Inside a project, the sidebar follow
 The project home is a persistent **Research Agent** built on the [Pi](https://pi.dev/docs/latest/sdk) `AgentSession` substrate (`@earendil-works/pi-coding-agent`): multi-turn tool loops with bounded project context (papers, matrix, research thread, experiment results, paper sources). Domain whitelist tools can draft insights, link RQ evidence, design experiments, propose paper Diffs, compile LaTeX, and more — with clickable citations back into the workspace. Built-in coding tools (`bash` / `write` / `edit`) stay off; writes remain drafts only.
 
 ### Literature library
-Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 核心文献), favorites, tags, and per-project notes. Select multiple papers in the list to **batch-delete** them (same permanent delete as the per-row action: removes PDF, evidence, and linked knowledge across projects after confirm).
+Import papers by DOI / arXiv ID / URL with automatic metadata, or batch-upload PDFs (≤ 25 MB each). Track reading status (待读 → 粗读 → 精读 → 已复现 → 核心文献), favorites, tags, and per-project notes. Select multiple papers in the list to **batch-delete** them (same permanent delete as the per-row action: removes PDF, evidence, and linked knowledge across projects after confirm).
 
 **Folder sync (`literature/` inbox)** — if the project has a bound local workspace folder (`workspacePath`), you can drop PDFs into a fixed subfolder and import them in one click:
 
@@ -97,7 +97,9 @@ Built-in PDF reader with OCR. **Select any passage and a floating bubble appears
 
 - **划词翻译** — the translation renders inline in the bubble (the sidebar card keeps the last result). Only the selected text, its page, and the paper title are sent — never the whole document. Repeating a selection is free: it is served from an in-memory cache. One call covers up to 8,000 characters — a sentence or a paragraph, not a whole page; an over-long selection is refused with an explicit message (and the sidebar character counter turns red) instead of being silently truncated. Use the side-by-side reader below for whole-paper translation.
 - **原文高亮 + 锚定批注** — highlights, notes, and evidence are painted onto the PDF page as coloured marks anchored to the exact words. Marks are stored in PDF page units, so they stay in place across zoom, page turns, and reloads. Click a mark to jump back to its note in the sidebar.
-- **Side-by-side translation** — the reader opens with the original PDF on the left and a paper-like translation page on the right. Both panes show the same page and scroll together. The fast reader uses PDF text positions and line spacing to keep paragraphs and section headings separate, following the source page's one- or two-column layout. **精确解析并翻译全文** starts one job for all pages: a **locally installed MinerU 3.x** parses one page at a time, then sends only that page's passages for translation, up to 3 requests at a time. The toolbar shows the page range, model, progress and cancellation. Completed pages are cached; restarting skips their finished passages. It restores table rows and merged cells; only textual cells are translated, while numeric values are locked to their exact source spelling and model identifiers remain unchanged. Equations retain their original visual form. Figures retain their source image, and local OCR extracts figure text before sending only that text for translation; diagram meaning is not inferred by the text-only model. Parsed pages are cached locally by PDF hash, restored on reopening the page, and translations are stored separately by parser version in IndexedDB. Nothing is sent to the translation model before a translation click. Scanned pages offer **OCR 本页**; OCR text has no PDF geometry, so its layout is approximate. **批注与问答** remains available from the translation toolbar; clicking a translated passage opens its original text for annotation.
+- **Side-by-side translation** — the reader opens with the original PDF on the left and a paper-like translation page on the right. Both panes show the same page and scroll together. The fast reader uses PDF text positions and line spacing to keep paragraphs and section headings separate, following the source page's one- or two-column layout. **精确解析并翻译全文** starts one job for all pages: the **MinerU 3.4.2 CPU runtime bundled by v3.3.1 source builds** parses one page at a time, then sends only that page's passages for translation, up to 3 requests at a time. The toolbar shows the page range, model, progress and cancellation. Completed pages are cached; restarting skips their finished passages. It restores table rows and merged cells; only textual cells are translated, while numeric values are locked to their exact source spelling and model identifiers remain unchanged. Equations retain their original visual form.
+- **Figures and OCR** — Figures retain their source image, and local OCR extracts figure text before sending only that text for translation; diagram meaning is not inferred by the text-only model. Parsed pages are cached locally by PDF hash, restored on reopening the page, and translations are stored separately by parser version in IndexedDB.
+- **Data sent to AI** — Nothing is sent to the translation model before a translation click. Scanned pages offer **OCR 本页**; OCR text has no PDF geometry, so its layout is approximate. **批注与问答** remains available from the translation toolbar; clicking a translated passage opens its original text for annotation.
 
 Saving a selection as a Note, Claim, or Evidence keeps the paper reference and page number attached. Ask the AI about a passage: only the text you selected, its page number, and your question are sent to the model — never the whole document.
 
@@ -145,13 +147,13 @@ Click an image to view it at full size.
 
 ## Download
 
-**Upgrade to v3.3.0:** download the new installer, close ArguMesh, and install over your current version. Existing research data and saved AI settings are retained. The desktop app now checks GitHub for new stable releases at startup, shows a dismissible download notice, and offers **Settings → 应用更新 → 检查更新**. This optional check sends no research content; failed checks do not block use. v3.2.5 has no in-app checker, so please upgrade once manually. MinerU 3.x must be installed separately for precise PDF translation.
+**Current stable release: v3.3.0.** Download the new installer, close ArguMesh, and install over your current version. Existing research data and saved AI settings are retained. The desktop app now checks GitHub for new stable releases at startup, shows a dismissible download notice, and offers **Settings → 应用更新 → 检查更新**. This optional check sends no research content; failed checks do not block use. v3.2.5 has no in-app checker, so please upgrade once manually. Precise PDF translation in v3.3.0 requires a separate MinerU 3.x installation. The v3.3.1 source includes the bundled parser runtime and model-download progress; its installer has not been released yet.
 
 Prefer not to touch a terminal? A prebuilt Windows installer is attached to every [GitHub Release](https://github.com/Fyuan0206/ArguMesh/releases):
 
 | File | For |
 | --- | --- |
-| [`ArguMesh_3.3.0_x64-setup.exe`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0) | Windows 10/11 x64 — ~30 MB, `currentUser` install (no administrator rights) |
+| [`ArguMesh_3.3.0_x64-setup.exe`](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0) | Windows 10/11 x64 — ~28.5 MB; `currentUser` install (no administrator rights) |
 
 > ⚠️ **Read this before you install**
 >
@@ -175,7 +177,7 @@ Troubleshooting entry point: `%LOCALAPPDATA%\ArguMesh\sidecar.log` — it record
 
 Run it from source instead — see [Deployment](#deployment) below (`pnpm install` → `pnpm run db:seed` → `pnpm run dev`), or paste the [Deploy with AI](#deploy-with-ai) prompt into a coding agent.
 
-The desktop build is a thin Tauri shell around the same Hono app, so it has no features the web build lacks. To build it yourself, follow the recipe in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §3.
+The desktop and web builds share the core research workflows. The Tauri desktop host also provides a local sidecar, an installer and update reminders. To build it yourself, follow the recipe in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §3.
 
 ## Deployment
 

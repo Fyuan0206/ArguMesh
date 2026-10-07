@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ArguMesh",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "identifier": "com.argumesh.desktop",
   "build": {
     "frontendDist": "../src-tauri/assets",
@@ -38,6 +38,7 @@
       }
     },
     "resources": {
+      "../build/sidecar/mineru-runtime/": "sidecar/mineru-runtime/",
       "../build/sidecar/server.mjs": "sidecar/server.mjs",
       "../build/sidecar/node.exe": "sidecar/node.exe",
       "../build/sidecar/.env.example": "sidecar/.env.example",

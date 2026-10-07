@@ -40,6 +40,7 @@ pnpm run db:backup                 # 全表 JSON 快照 → backups/
 pnpm run db:studio                 # drizzle-kit studio
 
 # 桌面打包（另一条链路，见 DEPLOYMENT.md）
+pnpm run build:mineru              # Windows x64，需要构建机安装 uv；下载已锁定 CPU 依赖
 pnpm run build:sidecar -- --node-exe "$(node -p process.execPath)"
 pnpm tauri build
 ```
@@ -53,7 +54,9 @@ pnpm tauri build
 
 ### 可选：本机 MinerU 精确解析
 
-表格、公式和图片的结构化对照需要本机 `mineru` 命令。当前集成已用 MinerU **3.4.2** 的 `pipeline` CLI 验证；命令须在启动 ArguMesh 的同一环境中位于 `PATH`，可先运行 `mineru --version` 检查。未安装时「精确解析并翻译全文」会提示安装 MinerU；划词翻译、阅读问答和原文阅读仍可使用。首次解析会加载或下载 MinerU 模型，因此可能需要约一至数分钟；之后当前页结果按 PDF SHA-256 缓存在 `data/mineru-cache/`。CLI 只在本机处理当前页，不调用 mineru.net 的文档上传 API。MinerU 4.x 改用了 `mineru parse` / `mineru-kit` 命令树，当前尚未接入；见 [MinerU 官方 CLI 文档](https://github.com/opendatalab/MinerU/blob/master/docs/en/usage/cli_tools.md)。
+桌面安装包内置 Python **3.13.16** 与 MinerU **3.4.2** 的 CPU `pipeline` 环境，无需用户安装解析工具。构建机需有 `uv`，先执行 `pnpm run build:mineru`：下载并校验官方 Python 嵌入包，按 `scripts/mineru/requirements-win-x64.lock` 哈希安装 wheel 到 `build/mineru-runtime/`。不包含模型、用户配置或 PDF。`build:sidecar` 会验证并拷贝完整解析环境。
+
+源码运行优先使用 `build/mineru-runtime/`，缺失时仍可使用 PATH 中的 MinerU 3.4.2 CLI；桌面版环境不完整时明确提示重新安装，不回退到用户 PATH。宿主设置 `ARGUMESH_MINERU_RUNTIME` 与 `ARGUMESH_DATA_DIR`（用户数据根目录）；缓存位于该根目录的 `data/mineru-cache/`，模型位于 `data/mineru-models/`。未设置宿主变量时使用仓库的 `data/`。首次下载有独立 30 分钟超时，CPU 单页解析有 10 分钟超时；模型组下载完成才进入解析。下载可取消，重试通过下载器检查并复用已有文件；模型配置不使用用户的全局 `mineru.json`。CLI 只在本机处理指定页，不调用 mineru.net 的文档上传 API。MinerU 4.x CLI 尚未接入。
 
 `.env` 是可选的（dotenv）。模板在 `.env.example`，全部可选——不配任何 AI 也能跑，AI 功能会返回明确的「未配置」提示。
 

@@ -133,6 +133,8 @@ fn launch_sidecar(app: &tauri::AppHandle) -> Result<u16, String> {
         // 见 server/node.ts:cwd 决定 serveStatic({root:"./dist"}) 能否找到前端
         .env("PORT", "0")
         .env("ARGUMESH_DESKTOP", "1")
+        .env("ARGUMESH_DATA_DIR", &data_dir)
+        .env("ARGUMESH_MINERU_RUNTIME", sidecar_dir.join("mineru-runtime"))
         .env("DATABASE_URL", format!("file:{}", db_path.display()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

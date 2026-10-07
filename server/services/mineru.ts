@@ -1,8 +1,9 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+
+import { mineruDataDirectory, runMineruCommand, type ParserProgress } from "./mineru-runtime";
 
 export interface ParsedPageBlock {
   kind: "paragraph" | "heading" | "table" | "image" | "formula";
@@ -22,8 +23,8 @@ export interface ParsedPage {
 type ContentPart = { type?: unknown; content?: unknown };
 type ContentBlock = { type?: unknown; content?: Record<string, unknown>; bbox?: unknown };
 
-const cacheDirectory = resolve("data", "mineru-cache");
-const inFlight = new Map<string, { promise: Promise<ParsedPage>; controller: AbortController }>();
+const cacheDirectory = join(mineruDataDirectory(), "mineru-cache");
+const inFlight = new Map<string, { promise: Promise<ParsedPage>; controller: AbortController; progress: ParserProgress }>();
 let parseQueue: Promise<unknown> = Promise.resolve();
 
 function cachedPath(pdf: Uint8Array, page: number): string {
@@ -111,7 +112,7 @@ async function findContentList(directory: string, depth = 0): Promise<string | n
   return null;
 }
 
-async function runMineru(pdf: Uint8Array, page: number, signal: AbortSignal): Promise<ParsedPage> {
+async function runMineru(pdf: Uint8Array, page: number, signal: AbortSignal, progress: (value: ParserProgress) => void): Promise<ParsedPage> {
   if (signal.aborted) throw new Error("本地解析已取消");
   const directory = await mkdtemp(join(tmpdir(), "argumesh-mineru-"));
   try {
@@ -119,29 +120,7 @@ async function runMineru(pdf: Uint8Array, page: number, signal: AbortSignal): Pr
     const output = join(directory, "output");
     await writeFile(input, pdf);
     await mkdir(output);
-    await new Promise<void>((done, reject) => {
-      const command = process.platform === "win32" ? "mineru.exe" : "mineru";
-      const child = spawn(command, ["-p", input, "-o", output, "-s", String(page - 1), "-e", String(page - 1), "-b", "pipeline", "-m", "auto", "-f", "true", "-t", "true"], { windowsHide: true, stdio: "ignore" });
-      const stop = () => {
-        if (process.platform === "win32" && child.pid) spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
-        else child.kill();
-      };
-      const onAbort = () => { stop(); reject(new Error("本地解析已取消")); };
-      signal.addEventListener("abort", onAbort, { once: true });
-      if (signal.aborted) onAbort();
-      const timer = setTimeout(() => { stop(); reject(new Error("本地 MinerU 解析超时（3 分钟）")); }, 180_000);
-      child.once("error", (error: NodeJS.ErrnoException) => {
-        clearTimeout(timer);
-        signal.removeEventListener("abort", onAbort);
-        reject(error.code === "ENOENT" ? new Error("未找到本机 MinerU。请先安装 MinerU 3.x 并加入 PATH；划词翻译与原文阅读仍可使用。") : error);
-      });
-      child.once("exit", (code) => {
-        clearTimeout(timer);
-        signal.removeEventListener("abort", onAbort);
-        if (code === 0) done();
-        else reject(new Error(`本地 MinerU 解析失败（退出码 ${code ?? "未知"}）`));
-      });
-    });
+    await runMineruCommand(["-p", input, "-o", output, "-s", String(page - 1), "-e", String(page - 1), "-b", "pipeline", "-m", "auto", "-f", "true", "-t", "true"], signal, progress);
     const contentList = await findContentList(output);
     if (!contentList) throw new Error("MinerU 未生成结构化结果");
     const raw = JSON.parse(await readFile(contentList, "utf8")) as unknown;
@@ -161,13 +140,13 @@ export async function parsePaperPageLocally(pdf: Uint8Array, page: number): Prom
   if (current) return current.promise;
   const controller = new AbortController();
   const work = parseQueue.catch(() => {}).then(async () => {
-    const result = await runMineru(pdf, page, controller.signal);
+    const result = await runMineru(pdf, page, controller.signal, (progress) => { const job = inFlight.get(key); if (job) job.progress = progress; });
     await mkdir(cacheDirectory, { recursive: true });
     await writeFile(cached, JSON.stringify(result), "utf8");
     return result;
   });
   parseQueue = work;
-  inFlight.set(key, { promise: work, controller });
+  inFlight.set(key, { promise: work, controller, progress: { stage: "queued", completed: 0, total: 0 } });
   try { return await work; }
   finally { inFlight.delete(key); }
 }
@@ -177,4 +156,8 @@ export function cancelPaperPageParsing(pdf: Uint8Array, page: number): boolean {
   if (!active) return false;
   active.controller.abort();
   return true;
+}
+
+export function getPaperPageParseProgress(pdf: Uint8Array, page: number): ParserProgress | null {
+  return inFlight.get(cachedPath(pdf, page))?.progress ?? null;
 }

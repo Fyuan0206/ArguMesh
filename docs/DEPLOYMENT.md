@@ -77,7 +77,7 @@ wrangler deploy --config <打印出的路径>   # 用已认证的 Wrangler CLI �
 
 ## 3. 桌面安装包（Tauri 2 + Node sidecar）
 
-> ✅ **最新安装包 v3.3.0**：[GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0)。关闭应用后覆盖安装会保留现有本地研究数据与 AI 配置；新安装使用空库。桌面版新增启动更新提醒，设置页可手动检查，下载与说明链接通过系统浏览器打开。v3.2.5 用户需先手动升级一次；本机 MinerU 3.x 不随安装包分发。
+> ✅ **最新正式安装包 v3.3.0**：[GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0)。关闭应用后覆盖安装会保留现有本地研究数据与 AI 配置；新安装使用空库。桌面版新增启动更新提醒，设置页可手动检查，下载与说明链接通过系统浏览器打开。v3.2.5 用户需先手动升级一次；v3.3.0 需要另装 MinerU。当前 v3.3.1 源码加入内置独立 Python / MinerU CPU 环境，模型首次精确翻译时自动下载到用户数据目录，可取消与重试，升级后复用；新版安装包尚未发布。
 
 > **首次发布记录**：`v3.2.5` 于 2026-09-24 带上 Windows 安装包发到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)（用户当日重新提出发布）。发布是**手工三步**：提交 → 打 tag → `gh release create` 附带新构建的安装包；`.github/workflows/release.yml` 仍未做。发布说明、两份 README 的「下载安装」章节与 `CHANGELOG.md` 必须带上这三条事实：**安装包里是空库，AI 配置不随包带走**（装完要在设置页重填）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）。
 
@@ -89,6 +89,7 @@ wrangler deploy --config <打印出的路径>   # 用已认证的 Wrangler CLI �
 | --- | --- |
 | Node.js | ≥ 20（sidecar 以裸 node 运行，不用 tsx） |
 | pnpm | 仓库统一用 pnpm |
+| uv | 仅构建机需要，用于安装哈希锁定的 Windows x64 CPU wheel；用户无需安装 |
 | Rust 工具链 | rustup 安装，`rust-version = "1.77"` 起 |
 | MSVC 生成工具 | VS 2022 Build Tools（`tauri info` 会检查） |
 | WebView2 Runtime | Windows 自带（`tauri info` 会检查） |
@@ -99,26 +100,29 @@ wrangler deploy --config <打印出的路径>   # 用已认证的 Wrangler CLI �
 
 ### 3.2 构建流程
 
-三步，**顺序不能换**（第 2 步读第 1 步的 `dist/`，第 3 步读第 2 步的 `build/sidecar/`）。全部在仓库根执行。
+四步：先构建解析环境与前端，再组装 sidecar，最后打包桌面壳。全部在仓库根执行。
 
 ```bash
 # 0) 装依赖（只需一次）
 pnpm install
 
-# 1) 前端 + 类型检查 → dist/
+# 1) 独立解析环境 → build/mineru-runtime/（构建机安装 uv；固定 CPU wheel + 哈希校验）
+pnpm run build:mineru
+
+# 2) 前端 + 类型检查 → dist/
 pnpm run build
 
-# 2) 服务端打成 sidecar → build/sidecar/
+# 3) 服务端打成 sidecar → build/sidecar/
 #    --node-exe 是【必需】的
 pnpm run build:sidecar -- --node-exe "$(node -p process.execPath)"
 
-# 3) Rust 壳 + NSIS 打包（首次约数分钟，增量快）
+# 4) Rust 壳 + NSIS 打包（首次约数分钟，增量快）
 pnpm tauri build
 ```
 
 产物：`src-tauri/target/release/bundle/nsis/ArguMesh_<version>_x64-setup.exe`
 
-实测：约 30 MB 压缩 / 约 116 MB 安装后占用；`src-tauri/target/` 全量构建约 2 GB（已 gitignore，别提交）。安装模式 `currentUser`，**不需要管理员权限**；安装器语言 English + SimpChinese。
+内置 CPU 解析环境后安装包与安装占用会明显增大；模型不进入安装包，首次使用另行下载。`src-tauri/target/` 全量构建约 2 GB（已 gitignore，别提交）。安装模式 `currentUser`，**不需要管理员权限**；安装器语言 English + SimpChinese。
 
 ### 3.3 `--node-exe` 为什么必需
 
@@ -143,7 +147,8 @@ pnpm tauri build
 | `server.mjs` | esbuild 把 `server/node.ts` 打成**单文件 ESM**，裸 node 直接跑，不需要 tsx、不需要完整 node_modules |
 | `node.exe` | 由 `--node-exe` 拷入 |
 | `node_modules/@libsql/win32-x64-msvc/` | 唯一的运行时原生包（esbuild 无法内联 `.node`） |
-| `dist/` | 第 1 步的前端产物 |
+| `dist/` | 前端产物 |
+| `mineru-runtime/` | Python、MinerU 与 CPU 依赖，含第三方包许可文件；不含模型或用户配置 |
 | `template/argumesh.db` | **仅含表结构的空库**，已应用全部迁移，无任何业务数据 |
 | `.env.example` | 可选配置说明，随包发布 |
 | `README.txt` | 自动生成的启动说明（桌面壳和人工排错都读它） |

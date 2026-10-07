@@ -1,6 +1,6 @@
 {
   "name": "argumesh",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "private": true,
   "type": "module",
   "description": "ArguMesh 论脉 — 把证据连成研究脉络的本地研究工作台(开源版)",
@@ -11,6 +11,7 @@
     "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
     "build:sidecar": "node scripts/build-sidecar.mjs",
+    "build:mineru": "node scripts/build-mineru-runtime.mjs",
     "start": "tsx server/node.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

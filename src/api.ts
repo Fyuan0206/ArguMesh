@@ -1,3 +1,4 @@
+import type { ParserProgress } from "../server/services/mineru-runtime";
 export type EvidenceStatus = "draft" | "confirmed" | "conflict" | "missing";
 import type { ParsedPage } from "../server/services/mineru";
 import type { AppUpdate } from "../server/services/app-update";
@@ -251,6 +252,11 @@ export async function translateSelection(input: { text: string; targetLanguage: 
   return parseResponse<{ translation: string; model: string }>(await fetch("/api/reader/translate", {
     method: "POST", headers: authenticatedHeaders({ "content-type": "application/json" }), body: JSON.stringify(input), signal,
   }));
+}
+
+export async function getReaderPageParseStatus(paperId: string, page: number, signal?: AbortSignal): Promise<{ progress: ParserProgress | null }> {
+  const query = new URLSearchParams({ paperId, page: String(page) });
+  return parseResponse(await fetch(`/api/reader/parse-page/status?${query}`, { signal }));
 }
 
 export async function parseReaderPage(paperId: string, page: number, cachedOnly = false, signal?: AbortSignal): Promise<ParsedPage> {

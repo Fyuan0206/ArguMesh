@@ -159,6 +159,15 @@ const nodeExe = nodeExeArg > -1 ? process.argv[nodeExeArg + 1] : null;
 
 console.log(`[sidecar] 输出目录: ${path.relative(root, outDir)}`);
 
+// A desktop build must carry the private parser, never silently depend on developer PATH.
+const parserDir = path.join(root, "build", "mineru-runtime");
+for (const file of ["python.exe", "runner.py", "runtime.json", "Lib/site-packages/mineru/__init__.py"]) {
+  if (!(await exists(path.join(parserDir, file)))) throw new Error("[sidecar] Missing portable MinerU runtime; run pnpm run build:mineru first");
+}
+const parserCheck = spawnSync(path.join(parserDir, "python.exe"), ["-I", path.join(parserDir, "runner.py"), "check"], { stdio: "inherit", windowsHide: true });
+if (parserCheck.status !== 0) throw new Error("[sidecar] Portable MinerU validation failed");
+if (path.dirname(outDir) !== path.join(root, "build")) throw new Error("Unsafe sidecar build path");
+
 // 0. 清空旧产物
 await rm(outDir, { recursive: true, force: true });
 await mkdir(path.join(outDir, "node_modules"), { recursive: true });
@@ -243,6 +252,8 @@ for (const specifier of NATIVE_PACKAGES) {
       .join(", ")})`,
   );
 }
+
+await cp(parserDir, path.join(outDir, "mineru-runtime"), { recursive: true });
 
 // 4. 前端产物
 if (!(await exists(path.join(root, "dist", "index.html")))) {

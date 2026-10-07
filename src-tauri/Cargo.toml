@@ -1,6 +1,6 @@
 [package]
 name = "argumesh"
-version = "3.3.0"
+version = "3.3.1"
 description = "ArguMesh 论脉 — 把证据连成研究脉络的本地研究工作台"
 authors = ["ArguMesh"]
 license = "MIT"
