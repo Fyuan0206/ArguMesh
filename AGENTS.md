@@ -50,7 +50,7 @@
 
 ## 文档规则（强制）
 
-任何**用户可见**的功能变更，必须在**同一个任务内**更新 [`README.md`](README.md)（英文，主），功能在中文 README 里有描述时同一轮也改 [`README.zh-CN.md`](README.zh-CN.md)，并在 [`CHANGELOG.md`](CHANGELOG.md) 追加条目。
+任何**用户可见**的功能变更，必须在**同一个任务内**更新 [`README.md`](README.md)（中文，主），同一轮同步英文版 [`README.en.md`](README.en.md) 与中文兼容版 [`README.zh-CN.md`](README.zh-CN.md)，并在 [`CHANGELOG.md`](CHANGELOG.md) 追加条目。
 
 README / CHANGELOG 编辑属于实现的一部分，不是收尾抛光。仅纯重构、以及对用户不可见的内部改动（测试、CI、开发工具）可以跳过。
 

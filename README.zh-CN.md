@@ -7,7 +7,7 @@
 <p align="center"><strong>把证据连成研究脉络。</strong></p>
 
 <p align="center">
-  <a href="./README.md">English</a> · <strong>简体中文</strong> · <a href="https://github.com/Fyuan0206/ArguMesh/releases">Releases</a> · <a href="./LICENSE">MIT</a>
+  <a href="./README.en.md">English</a> · <strong>简体中文</strong> · <a href="https://github.com/Fyuan0206/ArguMesh/releases">Releases</a> · <a href="./LICENSE">MIT</a>
 </p>
 
 <p align="center">

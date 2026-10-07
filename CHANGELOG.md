@@ -8,6 +8,11 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 
 ---
 
+## Docs (2026-10-07) — Chinese repository homepage
+
+- Made README.md the Chinese homepage, with an English link to README.en.md. README.zh-CN.md remains available for existing links. Updated agent documentation rules for the new language layout.
+- 仓库主页改为中文，英文通过 README.en.md 跳转；保留 README.zh-CN.md 兼容已有链接，并同步调整 agent 文档规则。
+
 ## Docs (2026-10-07) — README presentation refresh
 
 - Refreshed both READMEs with a compact centered introduction, prominent acknowledgments, capability tables and a three-column screenshot gallery. Detailed feature descriptions remain expandable.

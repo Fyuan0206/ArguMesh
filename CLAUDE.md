@@ -107,7 +107,7 @@ pnpm run db:studio    # drizzle-kit studio
 
 ## Documentation Rules (mirrors `.cursor/rules/readme-on-feature-changes.mdc`, `alwaysApply: true`, and `AGENTS.md`)
 
-Any **user-facing** feature change must, **in the same task**: update **`README.md`** (English, primary) and `README.zh-CN.md` where the feature is described there, and append an entry to **`CHANGELOG.md`** (English first, Chinese in a `<details><summary>中文` block — the changelog used to live in the READMEs and now lives in its own file). Docs edits are part of the implementation, not polish. Skip only for pure refactors and internal-only changes invisible to users (tests, dev tooling).
+Any **user-facing** feature change must, **in the same task**: update **`README.md`** (Chinese, primary), **`README.en.md`** (English), and the Chinese compatibility copy `README.zh-CN.md`, and append an entry to **`CHANGELOG.md`** (English first, Chinese in a `<details><summary>中文` block — the changelog used to live in the READMEs and now lives in its own file). Docs edits are part of the implementation, not polish. Skip only for pure refactors and internal-only changes invisible to users (tests, dev tooling).
 
 `README.md` also carries a **Deploy with AI** section — a paste-ready prompt telling a coding agent to install/seed/start ArguMesh *without* adding Cloudflare/Wrangler/Turso. Keep that prompt correct (Node ≥ 20, `pnpm install` → `db:seed` → `dev` or `build` + `start`, no invented keys, no public exposure) whenever commands change; it explicitly tells the agent to read this file.
 
