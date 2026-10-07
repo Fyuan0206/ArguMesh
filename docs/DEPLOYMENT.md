@@ -77,7 +77,7 @@ wrangler deploy --config <打印出的路径>   # 用已认证的 Wrangler CLI �
 
 ## 3. 桌面安装包（Tauri 2 + Node sidecar）
 
-> ✅ **最新正式安装包 v3.3.0**：[GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.0)。关闭应用后覆盖安装会保留现有本地研究数据与 AI 配置；新安装使用空库。桌面版新增启动更新提醒，设置页可手动检查，下载与说明链接通过系统浏览器打开。v3.2.5 用户需先手动升级一次；v3.3.0 需要另装 MinerU。当前 v3.3.1 源码加入内置独立 Python / MinerU CPU 环境，模型首次精确翻译时自动下载到用户数据目录，可取消与重试，升级后复用；新版安装包尚未发布。
+> ✅ **最新正式安装包 v3.3.1**：[GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.1)。请关闭应用后覆盖安装，保留现有本地研究数据与 AI 配置；新安装使用空库。v3.3.0 桌面版启动时会提示更新，设置页也可手动检查，下载与说明链接通过系统浏览器打开。v3.2.5 用户需先手动升级一次。新版内置独立 Python / MinerU CPU 环境及所需 Windows C++ 库，无需额外安装工具；首次精确翻译自动下载约 2.5 GB 的解析模型到用户数据目录，可取消与重试，重启及升级后复用。
 
 > **首次发布记录**：`v3.2.5` 于 2026-09-24 带上 Windows 安装包发到 [GitHub Releases](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.2.5)（用户当日重新提出发布）。发布是**手工三步**：提交 → 打 tag → `gh release create` 附带新构建的安装包；`.github/workflows/release.yml` 仍未做。发布说明、两份 README 的「下载安装」章节与 `CHANGELOG.md` 必须带上这三条事实：**安装包里是空库，AI 配置不随包带走**（装完要在设置页重填）、**没有代码签名**（SmartScreen 会拦）、**应用无鉴权**（不要把端口暴露到不可信网络）。
 
@@ -148,7 +148,7 @@ pnpm tauri build
 | `node.exe` | 由 `--node-exe` 拷入 |
 | `node_modules/@libsql/win32-x64-msvc/` | 唯一的运行时原生包（esbuild 无法内联 `.node`） |
 | `dist/` | 前端产物 |
-| `mineru-runtime/` | Python、MinerU 与 CPU 依赖，含第三方包许可文件；不含模型或用户配置 |
+| `mineru-runtime/` | Python、MinerU、CPU 依赖和应用私有 Windows C++ 库，含第三方许可文件；不含模型或用户配置 |
 | `template/argumesh.db` | **仅含表结构的空库**，已应用全部迁移，无任何业务数据 |
 | `.env.example` | 可选配置说明，随包发布 |
 | `README.txt` | 自动生成的启动说明（桌面壳和人工排错都读它） |

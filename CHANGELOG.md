@@ -18,12 +18,12 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 - Made README.md the Chinese homepage, with an English link to README.en.md. README.zh-CN.md remains available for existing links. Updated agent documentation rules for the new language layout.
 - 仓库主页改为中文，英文通过 README.en.md 跳转；保留 README.zh-CN.md 兼容已有链接，并同步调整 agent 文档规则。
 
-## Unreleased — v3.3.1 (2026-10-07) — bundled PDF parser runtime
+## v3.3.1 (2026-10-07) — bundled PDF parser runtime
 
 - v3.3.1 desktop builds include an isolated Python 3.13.16 / MinerU 3.4.2 CPU runtime with locked, hash-verified dependencies and app-local Microsoft Visual C++ 14.44.35211 libraries. The build checks the complete inference imports and their private DLL paths. Users no longer need to install Python, MinerU or configure PATH.
 - Parsing models download automatically on the first precise translation, with model-group progress, cancellation and retry. Model files and partial downloads live in user data and survive upgrades; subsequent parsing uses local models. Downloads use the official ModelScope mirror; interrupted configuration writes recover automatically. Unused C++ static link archives are excluded from the runtime. PDFs are parsed locally; translation still sends only the active page's passages or OCR text to the configured API.
 - Windows 安装包内置独立 Python / MinerU CPU 环境，用户无需额外安装或配置 PATH。首次精确翻译自动下载模型，显示模型组进度，可取消、失败后可继续；模型与下载缓存位于用户数据目录，升级后复用。解析在本机完成，翻译仍只发送当前页分段或图内 OCR 文字。
-- v3.3.1 installer publication is pending. No database migration is required; existing research data and AI settings remain compatible. / v3.3.1 安装包尚未发布；无新增数据库迁移，兼容现有研究数据与 AI 配置。
+- Published the Windows installer and SHA-256 checksum on GitHub Releases. Close the app and install v3.3.1 over the current version; v3.3.0 users receive the in-app update notice. No database migration is required; existing research data and AI settings remain compatible. / 已发布 Windows 安装包与 SHA-256 校验文件，请关闭应用后覆盖安装；v3.3.0 用户可收到应用内更新提醒。无新增数据库迁移，兼容现有研究数据与 AI 配置。
 - Fixed the parser progress prefix boundary so valid download progress messages reach the reader. / 修复解析进度消息的前缀截取，确保模型下载进度可显示。
 
 ## Docs (2026-10-07) — README presentation refresh
