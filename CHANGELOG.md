@@ -8,6 +8,13 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 
 ---
 
+## Release (2026-10-29) — v3.3.3 Apple Silicon Mac installer
+
+- Built `ArguMesh_3.3.3_aarch64.dmg` from upstream `main` commit `9855070` and published it with a SHA-256 file on the [FakeNirvana fork's Mac Release](https://github.com/FakeNirvana/ArguMesh/releases/tag/v3.3.3-macos). The DMG is 317,170,141 bytes; SHA-256: `d25c52e246ba0dfe7ecf6d518cf217407fe9c9d742687b0db90634b364b342f2`. The upstream v3.3.3 Release still requires a maintainer to attach this Mac asset separately.
+- Verified the DMG checksum and single app, arm64 app and Node binaries, app version 3.3.3, ad hoc resource seal, replacement installation at `/Applications/ArguMesh.app`, desktop startup, health/static assets and project write/read with an isolated test data directory. The app has no Apple Developer signature or notarization. Parsing model download and AI translation were not exercised.
+- 基于上游 `main` 提交 `9855070` 构建 `ArguMesh_3.3.3_aarch64.dmg`，连同 SHA-256 文件发布到 [FakeNirvana fork 的 Mac Release](https://github.com/FakeNirvana/ArguMesh/releases/tag/v3.3.3-macos)。DMG 大小 317,170,141 字节，SHA-256：`d25c52e246ba0dfe7ecf6d518cf217407fe9c9d742687b0db90634b364b342f2`。上游 v3.3.3 Release 仍需维护者单独添加 Mac 附件。
+- 已验证 DMG 校验和、单份应用、arm64 主程序和 Node、应用版本 3.3.3、ad hoc 资源签名、覆盖安装到 `/Applications/ArguMesh.app`、桌面启动、健康接口与静态资源，并在独立测试数据目录完成项目写入/读取。未进行 Apple 开发者签名或公证；未测试解析模型下载与 AI 翻译。
+
 ## Release (2026-10-29) — v3.3.3 Windows desktop installer
 
 - Published [v3.3.3](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.3) as the latest stable release, with the verified Windows x64 installer and its SHA-256 file. The installer is 223,546,607 bytes (213.2 MiB); SHA-256: `9d80bf60c76ad8d5096806670efb49088bb5c20248db6c6ed95f47ddcdf3ca19`. The tag points to build commit `51bd4e3`; release documentation is synchronized afterward.

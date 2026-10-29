@@ -179,14 +179,14 @@ API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePa
 
 ## 下载安装
 
-**v3.3.3 已发布（2026-10-29）**：[Windows x64 安装包与更新说明](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.3)已上线，另附 [SHA-256 校验文件](https://github.com/Fyuan0206/ArguMesh/releases/download/v3.3.3/ArguMesh_3.3.3_x64-setup.exe.sha256)。本版包含 Nature 技能、Paper Card 对照填写、阅读器双栏对齐与 PDF 重启持久化修复；Mac 最新安装包仍为 v3.3.2，本轮未构建新版 DMG。桌面覆盖升级会事务性补齐 `0015_agent_skills`，保留已有项目、消息与 AI 配置。新安装仍为空库，不带用户数据或 AI 密钥；安装包未签名，应用无鉴权、仅监听本机。构建方法见 [部署说明](docs/DEPLOYMENT.md)。
+**v3.3.3 已发布（2026-10-29）**：[Windows x64 安装包与更新说明](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.3)已上线，另附 [SHA-256 校验文件](https://github.com/Fyuan0206/ArguMesh/releases/download/v3.3.3/ArguMesh_3.3.3_x64-setup.exe.sha256)。本版包含 Nature 技能、Paper Card 对照填写、阅读器双栏对齐与 PDF 重启持久化修复。Apple Silicon Mac v3.3.3 安装包已在 [FakeNirvana fork 的 Mac Release](https://github.com/FakeNirvana/ArguMesh/releases/tag/v3.3.3-macos) 提供；上游 v3.3.3 Release 添加 Mac 附件前，请从该链接下载。桌面覆盖升级会事务性补齐 `0015_agent_skills`，保留已有项目、消息与 AI 配置。新安装仍为空库，不带用户数据或 AI 密钥；Windows 包未签名，Mac 包无 Apple 开发者签名或公证，应用无鉴权、仅监听本机。构建方法见 [部署说明](docs/DEPLOYMENT.md)。
 
-下表按平台提供当前安装包；Apple Silicon Mac 及其校验文件见 [v3.3.2 Release](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.2)。
+下表按平台提供当前安装包；Apple Silicon Mac 及其校验文件见 [v3.3.3 Mac Release](https://github.com/FakeNirvana/ArguMesh/releases/tag/v3.3.3-macos)。
 
 | 文件 | 适用 |
 | --- | --- |
 | [`ArguMesh_3.3.3_x64-setup.exe`](https://github.com/Fyuan0206/ArguMesh/releases/download/v3.3.3/ArguMesh_3.3.3_x64-setup.exe) | Windows 10/11 x64，`currentUser` 安装，**不需要管理员权限** |
-| [`ArguMesh_3.3.2_aarch64.dmg`](https://github.com/Fyuan0206/ArguMesh/releases/download/v3.3.2/ArguMesh_3.3.2_aarch64.dmg) | macOS Apple Silicon（M 系列）；不适用于 Intel Mac |
+| [`ArguMesh_3.3.3_aarch64.dmg`](https://github.com/FakeNirvana/ArguMesh/releases/download/v3.3.3-macos/ArguMesh_3.3.3_aarch64.dmg) | macOS Apple Silicon（M 系列）；不适用于 Intel Mac |
 
 **Windows v3.3.3 安装说明：** 关闭 ArguMesh 后覆盖安装；已有数据库与已保存的 AI 配置不会被安装器覆盖。升级前请导出工作区备份。桌面版启动时查询 GitHub 最新正式版，提供可关闭的下载提醒；也可在 **设置 → 应用更新 → 检查更新** 手动检查。检查不发送研究内容，网络失败不影响使用。v3.2.5 没有应用内检查功能，请先手动更新一次。新版内置独立 Node / Python / MinerU 与 Windows 所需 C++ 运行库；首次精确翻译自动下载约 2.5 GB 的解析模型，可取消与重试，升级后复用。
 
@@ -212,7 +212,7 @@ API:`POST /api/projects/:projectId/library/scan-inbox`(需已设置 `workspacePa
 
 ### 不用 Windows?
 
-**Apple Silicon Mac** 下载 [v3.3.2 Release](https://github.com/Fyuan0206/ArguMesh/releases/tag/v3.3.2) 中的 `.dmg`，打开后将 `ArguMesh.app` 拖入 Applications，再从应用程序目录启动。Mac 包内含独立 Node、Python 与 MinerU；首次精确解析仍需下载模型。数据存放在 `~/Library/Application Support/ArguMesh`，包括数据库、工作区文件及阅读缓存（OCR 文本与译文）；重启换端口后可继续读取。Mac 包未进行 Apple 开发者签名或公证，首次启动需在 macOS 中手动确认。该 v3.3.2 DMG 的内部应用与服务版本均已核验为 3.3.2，归档完整性检查通过，模板库无业务数据；本次任务未在 Mac 实机启动验证。源码构建步骤见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) 第 3 节。
+**Apple Silicon Mac** 下载 [v3.3.3 Mac Release](https://github.com/FakeNirvana/ArguMesh/releases/tag/v3.3.3-macos) 中的 `.dmg`，打开后将 `ArguMesh.app` 拖入 Applications 并覆盖旧版，再从应用程序目录启动。Mac 包内含独立 Node、Python 与 MinerU；首次精确解析仍需下载模型。数据存放在 `~/Library/Application Support/ArguMesh`，包括数据库、工作区文件及阅读缓存（OCR 文本与译文）；重启换端口后可继续读取。Mac 包未进行 Apple 开发者签名或公证，首次启动需在 macOS 中手动确认。该 v3.3.3 DMG 的应用版本为 3.3.3，归档完整性、空模板库、本机覆盖安装、启动与项目读写均已验证。源码构建步骤见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) 第 3 节。
 
 DMG 中只有一份 `ArguMesh.app`；安装时将它拖入“应用程序”并覆盖旧版。名称带 `previous`、`pre-cache` 或 `before` 的 `.app` 是旧版备份，可移入废纸篓；用户数据保存在上述 Application Support 目录，不在应用包内。
 
