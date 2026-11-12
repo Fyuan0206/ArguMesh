@@ -8,6 +8,11 @@ ArguMesh（论脉）的版本历史。README 只保留指向本文件的入口�
 
 ---
 
+## Unreleased (2026-11-12) — Personal research agent positioning
+
+- Positioned ArguMesh as a local-first, open-source personal research agent. Updated the bilingual READMEs, product and brand documentation, website source, app labels, and package descriptions to reflect the project-aware agent and its evidence-linked workflow. No database migration.
+- 将 ArguMesh 定位为本地优先、开源的科研 personal agent。同步更新中英文 README、产品与品牌文档、官网源码、应用文案和包描述，突出 Agent 如何利用项目上下文协助研究并提供可核验的证据引用。无需数据库迁移。
+
 ## Release (2026-10-29) — v3.3.3 Apple Silicon Mac installer
 
 - Built `ArguMesh_3.3.3_aarch64.dmg` from upstream `main` commit `9855070` and published it with a SHA-256 file on the [FakeNirvana fork's Mac Release](https://github.com/FakeNirvana/ArguMesh/releases/tag/v3.3.3-macos). The DMG is 317,170,141 bytes; SHA-256: `d25c52e246ba0dfe7ecf6d518cf217407fe9c9d742687b0db90634b364b342f2`. The upstream v3.3.3 Release still requires a maintainer to attach this Mac asset separately.

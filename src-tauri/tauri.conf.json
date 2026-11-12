@@ -29,8 +29,8 @@
     "active": true,
     "targets": ["nsis"],
     "category": "Productivity",
-    "shortDescription": "把证据连成研究脉络的本地研究工作台",
-    "longDescription": "ArguMesh 论脉:文献 → 证据矩阵 → 研究脉络 → 实验 → 写作 的本地优先研究工作台。数据存在本机 SQLite,AI 配置由用户自备。",
+    "shortDescription": "本地优先、开源的科研 personal agent",
+    "longDescription": "ArguMesh 论脉结合项目里的论文与证据，协助梳理发现、规划实验和修改论文。研究数据保存在本地 SQLite，用户按需接入自己的 AI 模型。",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

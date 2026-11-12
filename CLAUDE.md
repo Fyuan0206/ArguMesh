@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-**ArguMesh(论脉)** — open-source, local-first research workbench: `Literature → Evidence Matrix → Research Thread → Experiments → Writing`. Repo: **[github.com/Fyuan0206/ArguMesh](https://github.com/Fyuan0206/ArguMesh)** (MIT). This is the self-contained OSS edition: **pure Node + local SQLite, zero cloud dependencies**. (The earlier Cloudflare edition lives at `../prototype` on Workers + Turso; that stack was deliberately removed here — do not reintroduce Cloudflare bindings, wrangler, or Turso-account requirements.)
+**ArguMesh (论脉)** is an open-source, local-first personal research agent. It uses project context across `Literature → Evidence Matrix → Research Thread → Experiments → Writing`. Repo: **[github.com/Fyuan0206/ArguMesh](https://github.com/Fyuan0206/ArguMesh)** (MIT). This is the self-contained OSS edition: **pure Node + local SQLite, zero cloud dependencies**. (The earlier Cloudflare edition lives at `../prototype` on Workers + Turso; that stack was deliberately removed here — do not reintroduce Cloudflare bindings, wrangler, or Turso-account requirements.)
 
 - Frontend: React 19 SPA (Vite 6) — projects, library, PDF reader, evidence matrix, research thread, experiments, LaTeX writing, tasks, search, settings. Single-user; **no auth/admin UI**.
 - Backend: Hono 4 served by `@hono/node-server` (`server/node.ts`), SQLite via libSQL `file:` URL + Drizzle ORM.

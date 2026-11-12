@@ -25,9 +25,9 @@
   <a href="https://argumesh.nekocfy.com/">argumesh.nekocfy.com</a>
 </p>
 
-ArguMesh (Chinese name 「论脉」) is a **local-first, open-source research workbench** for researchers, graduate students, and paper authors. It connects literature, evidence, research questions, experiments and writing in one traceable workflow.
+ArguMesh (论脉) is a **local-first, open-source personal research agent** for researchers, graduate students, and paper authors.
 
-Stop shuffling information between PDF readers, spreadsheets, note apps, and chat AI.
+The agent keeps the conversation in your project and draws on your papers, evidence, and research questions to help synthesize findings, plan experiments, analyze imported results, and propose LaTeX edits. Follow its references back to the project materials and decide which drafts to accept.
 
 
 > Note: the interface is currently in Chinese. 中文文档见 [README.md](./README.md)。

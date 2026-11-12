@@ -3,7 +3,7 @@
   "version": "3.3.3",
   "private": true,
   "type": "module",
-  "description": "ArguMesh 论脉 — 把证据连成研究脉络的本地研究工作台(开源版)",
+  "description": "ArguMesh 论脉 — 本地优先、开源的科研 personal agent",
   "license": "MIT",
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,green \"pnpm:dev:api\" \"pnpm:dev:web\"",

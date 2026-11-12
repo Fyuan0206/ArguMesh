@@ -73,7 +73,7 @@ export function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => voi
     <aside className="sidebar" aria-label="主导航">
       <NavLink className="brand" to="/projects">
         <BrandMark className="brand-mark" />
-        <span className="brand-text">ArguMesh<small>论脉 · Research Workbench</small></span>
+        <span className="brand-text">ArguMesh<small>论脉 · 科研 personal agent</small></span>
       </NavLink>
       <nav aria-label={inProject ? "项目研究导航" : "已有项目"}>
         {inProject ? (
